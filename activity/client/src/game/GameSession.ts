@@ -43,9 +43,11 @@ export class GameSession {
   constructor(
     private map: MapData,
     waveTexts: string[],
+    startingLetters: import("./LettreTour").LettreTour[] = [],
   ) {
-    this.waveTexts = waveTexts;
-    this.cheminPx = map.chemin.map(c => c.centre);
+    this.waveTexts  = waveTexts;
+    this.cheminPx   = map.chemin.map(c => c.centre);
+    this.inventaire = [...startingLetters];
   }
 
   private cheminPx: Point2D[];
