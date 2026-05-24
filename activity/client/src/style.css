@@ -192,9 +192,84 @@ body {
 
 .inv-grid {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
 }
+
+/* ── Ligne lettre A→Z ─────────────────────────────────────── */
+.letter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: #0f0f22;
+  border: 1px solid #1a1a3a;
+}
+
+.letter-row-name {
+  font-weight: bold;
+  font-size: 1rem;
+  color: #FFFFFF;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Chips lecture seule (écran invocation) */
+.elem-chip {
+  font-size: 0.68rem;
+  padding: 2px 7px;
+  border-radius: 3px;
+  color: rgba(255,255,255,0.9);
+  font-weight: bold;
+}
+.elem-chip.elem-rare { outline: 1px solid #FFD700; }
+
+/* Boutons de sélection (deck builder) */
+.elem-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 52px;
+  padding: 4px 4px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  font-family: monospace;
+  font-size: 0.65rem;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.elem-btn.locked {
+  background: #111111;
+  color: #333333;
+  cursor: default;
+}
+
+.elem-btn.owned {
+  background: color-mix(in srgb, var(--elem-color) 25%, #0d0d22);
+  border-color: color-mix(in srgb, var(--elem-color) 40%, transparent);
+  color: #cccccc;
+}
+
+.elem-btn.owned:hover {
+  border-color: var(--elem-color);
+  color: #ffffff;
+}
+
+.elem-btn.owned.selected {
+  background: color-mix(in srgb, var(--elem-color) 45%, #0d0d22);
+  border-color: var(--elem-color);
+  color: #ffffff;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--elem-color) 60%, transparent);
+}
+
+.elem-btn.elem-rare { outline: 1px solid #997700; }
+.elem-btn.owned.selected.elem-rare { outline-color: #FFD700; }
+
+.elem-btn-name { font-weight: bold; font-size: 0.7rem; }
+.elem-btn-lv   { font-size: 0.58rem; color: #FFCC44; margin-top: 1px; }
 
 .ticket-bar {
   display: flex;

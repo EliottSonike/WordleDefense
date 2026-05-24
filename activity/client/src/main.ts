@@ -32,9 +32,13 @@ async function initDiscord(): Promise<void> {
 
 // ── Tickets (persistants) ─────────────────────────────────────────────────────
 
-const TICKETS_KEY   = "wd_tickets";
-const COLLECTION_KEY = "wd_collection";
+const TICKETS_KEY    = "wd_tickets";
+const COLLECTION_KEY  = "wd_collection";
+const DECK_KEY        = "wd_deck";
 const STARTING_TICKETS = 30;
+
+const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const ALL_ELEMENTS = ["FEU", "EAU", "TERRE", "VENT"];
 
 function getTickets(): number {
   return parseInt(localStorage.getItem(TICKETS_KEY) ?? String(STARTING_TICKETS));
@@ -63,6 +67,15 @@ function getCollection(): CollectionEntry[] {
 function saveCollection(col: CollectionEntry[]): void {
   localStorage.setItem(COLLECTION_KEY, JSON.stringify(col));
 }
+// Deck : lettre → élément sélectionné (une seule variante par lettre en jeu)
+function getDeck(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(DECK_KEY) ?? "{}"); }
+  catch { return {}; }
+}
+function saveDeck(deck: Record<string, string>): void {
+  localStorage.setItem(DECK_KEY, JSON.stringify(deck));
+}
+
 function entryToLettreTour(e: CollectionEntry): LettreTour {
   const lt = creerLettreTourFromData(
     e.lettre,
@@ -109,37 +122,79 @@ function updateTicketDisplays(): void {
   document.getElementById("inv-ticket-count")!.textContent  = String(t);
 }
 
+/** Rendu A→Z compact pour l'écran invocation (lecture seule) */
 function renderCollection(): void {
   const col   = getCollection();
   const list  = document.getElementById("inv-preGame-list")!;
   const count = document.getElementById("inv-count")!;
   count.textContent = `(${col.length})`;
   list.innerHTML = "";
-  for (const e of col) list.appendChild(makeEntryItem(e));
+  // grouper par lettre
+  for (const letter of ALL_LETTERS) {
+    const variants = col.filter(e => e.lettre === letter);
+    if (variants.length === 0) continue;
+    const row = document.createElement("div");
+    row.className = "letter-row";
+    const lbl = document.createElement("span");
+    lbl.className = "letter-row-name";
+    lbl.textContent = letter;
+    row.appendChild(lbl);
+    for (const e of variants) {
+      const chip = document.createElement("span");
+      chip.className = "elem-chip";
+      chip.style.background = getCouleur(e.element as import("./game/Element").Element);
+      chip.textContent = `${e.element.slice(0,3)} Nv.${e.niveau}`;
+      if (e.rarete === RareteLettre.RARE) chip.classList.add("elem-rare");
+      row.appendChild(chip);
+    }
+    list.appendChild(row);
+  }
 }
 
+/** Rendu A→Z avec sélection d'élément (deck builder) */
 function renderLetterbox(): void {
   const col   = getCollection();
   const list  = document.getElementById("letterbox-list")!;
   const empty = document.getElementById("letterbox-empty")!;
+  const deck  = getDeck();
   list.innerHTML = "";
   empty.classList.toggle("hidden", col.length > 0);
-  for (const e of col) list.appendChild(makeEntryItem(e));
-}
 
-function makeEntryItem(e: CollectionEntry): HTMLDivElement {
-  const el = document.createElement("div");
-  el.className = "inv-item";
-  const color = getCouleur(e.element as import("./game/Element").Element);
-  const rare  = e.rarete === RareteLettre.RARE;
-  el.innerHTML = `
-    <div class="badge" style="background:${color}">${e.lettre}</div>
-    <div class="info">
-      ${rare ? "⭐ RARE" : "commun"}<br/>
-      ${e.element}
-    </div>
-    <div class="niveau-badge">Nv.${e.niveau}</div>`;
-  return el;
+  for (const letter of ALL_LETTERS) {
+    const row = document.createElement("div");
+    row.className = "letter-row";
+
+    const lbl = document.createElement("span");
+    lbl.className = "letter-row-name";
+    lbl.textContent = letter;
+    row.appendChild(lbl);
+
+    for (const elem of ALL_ELEMENTS) {
+      const entry = col.find(e => e.lettre === letter && e.element === elem);
+      const btn   = document.createElement("button");
+      const selected = deck[letter] === elem;
+
+      if (entry) {
+        btn.className = "elem-btn owned" + (selected ? " selected" : "");
+        btn.style.setProperty("--elem-color", getCouleur(entry.element as import("./game/Element").Element));
+        btn.innerHTML = `<span class="elem-btn-name">${elem.slice(0,3)}</span><span class="elem-btn-lv">Nv.${entry.niveau}</span>`;
+        if (entry.rarete === RareteLettre.RARE) btn.classList.add("elem-rare");
+        btn.addEventListener("click", () => {
+          const d = getDeck();
+          if (d[letter] === elem) delete d[letter]; // désélectionner
+          else d[letter] = elem;
+          saveDeck(d);
+          renderLetterbox();
+        });
+      } else {
+        btn.className = "elem-btn locked";
+        btn.disabled = true;
+        btn.textContent = elem.slice(0,3);
+      }
+      row.appendChild(btn);
+    }
+    list.appendChild(row);
+  }
 }
 
 function makeInvItem(lt: LettreTour): HTMLDivElement {
@@ -313,7 +368,13 @@ function loop(ts: number): void {
 }
 
 function startGame(): void {
-  const startingLetters = getCollection().map(entryToLettreTour);
+  const col   = getCollection();
+  const deck  = getDeck();
+  // Lettres du deck sélectionné (une variante par lettre), sinon toutes
+  const deckEntries = Object.entries(deck)
+    .map(([lettre, element]) => col.find(e => e.lettre === lettre && e.element === element))
+    .filter((e): e is CollectionEntry => e !== undefined);
+  const startingLetters = (deckEntries.length > 0 ? deckEntries : col).map(entryToLettreTour);
   session = new GameSession(mapData, waveTexts, startingLetters);
 
   const panelW = 220;
@@ -345,6 +406,7 @@ async function main(): Promise<void> {
     if (!confirm("Réinitialiser toute la progression (tickets + collection) ?")) return;
     localStorage.removeItem(TICKETS_KEY);
     localStorage.removeItem(COLLECTION_KEY);
+    localStorage.removeItem(DECK_KEY);
     updateTicketDisplays();
   });
   document.getElementById("btn-go-invocation")!.addEventListener("click", () => {
