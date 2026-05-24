@@ -196,11 +196,91 @@ body {
   gap: 8px;
 }
 
-.inv-pull-area {
+.ticket-bar {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #0f0f22;
+  border: 1px solid #2a2a55;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+.ticket-label { color: #8899cc; }
+.ticket-value { font-size: 1.2rem; font-weight: bold; color: #FFCC44; }
+
+.pull-actions {
+  display: flex;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+.pull-btn {
+  flex: 1;
+  min-width: 140px;
+  font-size: 0.9rem;
+  background: #14143a;
+  border-color: #4444aa;
+}
+.pull-btn:hover { background: #1e1e55; border-color: #7777ff; }
+
+.cost {
+  font-size: 0.7rem;
+  color: #FFCC44;
+  margin-left: 4px;
+}
+
+.pull-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  background: #0a0a1e;
+  border: 1px solid #2a2a55;
+  border-radius: 6px;
+}
+
+.pull-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #141430;
+  border: 1px solid #2a2a55;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  color: #aabbdd;
+}
+
+.pull-item.pull-rare {
+  border-color: #997700;
+  background: #1a1a05;
+  color: #FFD700;
+}
+
+.pull-item.pull-error {
+  border-color: #550000;
+  background: #1a0505;
+  color: #ff6666;
+}
+
+.pull-badge {
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.85rem;
+  color: white;
+  flex-shrink: 0;
+}
+
+.menu-tickets {
+  font-size: 0.85rem;
+  color: #FFCC44;
+  letter-spacing: 1px;
 }
 
 .empty-msg {

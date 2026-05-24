@@ -1,6 +1,5 @@
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import { GameSession, Phase } from "./game/GameSession";
-import { BonusType, ALL_BONUS_TYPES } from "./game/BonusType";
 import { getCouleur } from "./game/Element";
 import { RareteLettre } from "./game/RareteLettre";
 import { render, CANVAS_H } from "./game/Renderer";
@@ -31,75 +30,144 @@ async function initDiscord(): Promise<void> {
   await sdk.commands.authenticate({ access_token });
 }
 
+// ── Tickets (persistants) ─────────────────────────────────────────────────────
+
+const TICKETS_KEY   = "wd_tickets";
+const COLLECTION_KEY = "wd_collection";
+const STARTING_TICKETS = 30;
+
+function getTickets(): number {
+  return parseInt(localStorage.getItem(TICKETS_KEY) ?? String(STARTING_TICKETS));
+}
+function setTickets(n: number): void {
+  localStorage.setItem(TICKETS_KEY, String(Math.max(0, n)));
+}
+
+// Collection persistante (lettres invoquées)
+function getCollection(): LettreTour[] {
+  try {
+    const raw = localStorage.getItem(COLLECTION_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as LettreTour[];
+  } catch { return []; }
+}
+function saveCollection(col: LettreTour[]): void {
+  localStorage.setItem(COLLECTION_KEY, JSON.stringify(col));
+}
+
 // ── Screen helpers ────────────────────────────────────────────────────────────
 
 type Screen = "loading" | "menu" | "invocation" | "letterbox" | "game";
 
 function showScreen(s: Screen): void {
-  (["loading","menu","invocation","letterbox","game"] as Screen[]).forEach(id => {
-    const el = document.getElementById(id === "loading" ? "screen-loading"
-                                      : id === "game"    ? "game-container"
-                                      : `screen-${id}`)!;
-    el.classList.toggle("hidden", id !== s);
-  });
+  const ids: Record<Screen, string> = {
+    loading:    "screen-loading",
+    menu:       "screen-menu",
+    invocation: "screen-invocation",
+    letterbox:  "screen-letterbox",
+    game:       "game-container",
+  };
+  for (const [key, id] of Object.entries(ids)) {
+    document.getElementById(id)!.classList.toggle("hidden", key !== s);
+  }
 }
 
-// ── Elements DOM ──────────────────────────────────────────────────────────────
+// ── DOM refs ──────────────────────────────────────────────────────────────────
 
 const canvas     = document.getElementById("game-canvas")    as HTMLCanvasElement;
 const ctx        = canvas.getContext("2d")!;
 const invDiv     = document.getElementById("inventaire")!;
 const towersDiv  = document.getElementById("towers-list")!;
-const bonusDiv   = document.getElementById("bonus-list")!;
-const bonusSel   = document.getElementById("bonus-select")   as HTMLSelectElement;
 const logDiv     = document.getElementById("log-entries")!;
 const panelBuild = document.getElementById("panel-build")!;
 const panelPlace = document.getElementById("panel-place")!;
 const placingLbl = document.getElementById("placing-letter")!;
 
-// ── Pre-game letter collection ────────────────────────────────────────────────
+// ── Ticket / collection UI ────────────────────────────────────────────────────
 
-let preGameLetters: LettreTour[] = [];
+function updateTicketDisplays(): void {
+  const t = getTickets();
+  document.getElementById("menu-ticket-count")!.textContent = String(t);
+  document.getElementById("inv-ticket-count")!.textContent  = String(t);
+}
 
-function renderPreGameInv(): void {
+function renderCollection(): void {
+  const col   = getCollection();
   const list  = document.getElementById("inv-preGame-list")!;
   const count = document.getElementById("inv-count")!;
-  count.textContent = `(${preGameLetters.length})`;
+  count.textContent = `(${col.length})`;
   list.innerHTML = "";
-  for (const lt of preGameLetters) {
-    const el = document.createElement("div");
-    el.className = "inv-item";
-    el.innerHTML = `
-      <div class="badge" style="background:${getCouleur(lt.element)}">${lt.lettre}</div>
-      <div class="info">${lt.rarete === RareteLettre.RARE ? "⭐ RARE" : "commun"}<br/>${lt.element}</div>`;
-    list.appendChild(el);
+  for (const lt of col) {
+    list.appendChild(makeInvItem(lt));
   }
 }
 
 function renderLetterbox(): void {
+  const col   = getCollection();
   const list  = document.getElementById("letterbox-list")!;
   const empty = document.getElementById("letterbox-empty")!;
   list.innerHTML = "";
-  if (preGameLetters.length === 0) {
-    empty.classList.remove("hidden");
-    return;
-  }
-  empty.classList.add("hidden");
-  for (const lt of preGameLetters) {
-    const el = document.createElement("div");
-    el.className = "inv-item";
-    el.innerHTML = `
-      <div class="badge" style="background:${getCouleur(lt.element)}">${lt.lettre}</div>
-      <div class="info">${lt.rarete === RareteLettre.RARE ? "⭐ RARE" : "commun"}<br/>${lt.element}</div>`;
-    list.appendChild(el);
+  empty.classList.toggle("hidden", col.length > 0);
+  for (const lt of col) {
+    list.appendChild(makeInvItem(lt));
   }
 }
 
-// ── Game state ────────────────────────────────────────────────────────────────
+function makeInvItem(lt: LettreTour): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "inv-item";
+  el.innerHTML = `
+    <div class="badge" style="background:${getCouleur(lt.element)}">${lt.lettre}</div>
+    <div class="info">${lt.rarete === RareteLettre.RARE ? "⭐ RARE" : "commun"}<br/>${lt.element}</div>`;
+  return el;
+}
+
+function doPull(count: number): void {
+  const tickets = getTickets();
+  if (tickets < count) {
+    showPullResults([{ error: `Pas assez de tickets (${tickets}/${count})` }]);
+    return;
+  }
+  setTickets(tickets - count);
+  updateTicketDisplays();
+
+  const col     = getCollection();
+  const results: LettreTour[] = [];
+  for (let i = 0; i < count; i++) {
+    const lt = creerLettreTour();
+    col.push(lt);
+    results.push(lt);
+  }
+  saveCollection(col);
+  renderCollection();
+  showPullResults(results.map(lt => ({ lt })));
+}
+
+function showPullResults(items: ({ lt: LettreTour } | { error: string })[]): void {
+  const box = document.getElementById("pull-results")!;
+  box.classList.remove("hidden");
+  box.innerHTML = "";
+  for (const item of items) {
+    const el = document.createElement("div");
+    if ("error" in item) {
+      el.className = "pull-item pull-error";
+      el.textContent = item.error;
+    } else {
+      const lt = item.lt;
+      const rare = lt.rarete === RareteLettre.RARE;
+      el.className = "pull-item" + (rare ? " pull-rare" : "");
+      el.innerHTML = `<span class="pull-badge" style="background:${getCouleur(lt.element)}">${lt.lettre}</span>
+        <span>${lt.element}${rare ? " ⭐" : ""}</span>`;
+    }
+    box.appendChild(el);
+  }
+}
+
+// ── In-game state ─────────────────────────────────────────────────────────────
 
 let session: GameSession;
 let placingIdx: number | null = null;
-let mapData: MapData   = { grille: [], tailleCase: 70, chemin: [], constructibles: [], spawn: {x:0,y:0}, base: {x:700,y:700} };
+let mapData: MapData    = { grille: [], tailleCase: 70, chemin: [], constructibles: [], spawn: {x:0,y:0}, base: {x:700,y:700} };
 let waveTexts: string[] = [];
 
 function log(msg: string): void {
@@ -123,36 +191,19 @@ function renderInventaire(inventaire: LettreTour[]): void {
   });
 }
 
-function renderTours(tours: LettreTour[]): void {
-  towersDiv.innerHTML = "";
-  for (const t of tours) {
-    const el = document.createElement("div");
-    el.className = "tower-item";
-    el.textContent = `${t.lettre} ${t.element} ${t.rarete === RareteLettre.RARE ? "★" : ""}`;
-    towersDiv.appendChild(el);
-  }
-}
-
 function refreshUI(): void {
   const state = session.getState();
   renderInventaire(state.inventaire);
-  renderTours(state.tours);
 
-  // Bonus chips
-  bonusDiv.innerHTML = "";
-  for (const b of state.bm.getActifs()) {
-    const chip = document.createElement("span");
-    chip.className = "bonus-chip";
-    chip.textContent = `✕ ${b.replace("BOOST_", "")}`;
-    chip.addEventListener("click", () => {
-      session.desactiverBonus(b as BonusType);
-      refreshUI();
-    });
-    bonusDiv.appendChild(chip);
+  towersDiv.innerHTML = "";
+  for (const t of state.tours) {
+    const el = document.createElement("div");
+    el.className = "tower-item";
+    el.textContent = `${t.lettre} ${t.element}${t.rarete === RareteLettre.RARE ? " ★" : ""}`;
+    towersDiv.appendChild(el);
   }
 
   const inBuild = state.phase === Phase.BUILD;
-  document.getElementById("btn-invoke")!.toggleAttribute("disabled", !inBuild);
   document.getElementById("btn-launch")!.toggleAttribute("disabled", !inBuild);
 }
 
@@ -178,9 +229,9 @@ function cancelPlacing(): void {
 
 canvas.addEventListener("click", (e) => {
   if (placingIdx === null) return;
-  const rect    = canvas.getBoundingClientRect();
-  const scaleX  = canvas.width  / rect.width;
-  const scaleY  = canvas.height / rect.height;
+  const rect  = canvas.getBoundingClientRect();
+  const scaleX = canvas.width  / rect.width;
+  const scaleY = canvas.height / rect.height;
   const canvasX = (e.clientX - rect.left) * scaleX;
   const canvasY = (e.clientY - rect.top)  * scaleY;
 
@@ -192,10 +243,9 @@ canvas.addEventListener("click", (e) => {
   const scale = Math.min(canvas.width / (cols * ts), canvas.width / (rows * ts));
   const minX  = 350 - (cols / 2) * ts;
   const maxY  = 350 + (rows / 2) * ts;
-  const HUD_H = 50;
 
   const stdX = canvasX / scale + minX;
-  const stdY = maxY - (canvasY - HUD_H) / scale;
+  const stdY = maxY - (canvasY - 50) / scale;
 
   const cIdx = state.map.constructibles.findIndex(c =>
     c.libre && Math.abs(c.centre.x - stdX) <= c.taille / 2 && Math.abs(c.centre.y - stdY) <= c.taille / 2
@@ -210,17 +260,17 @@ canvas.addEventListener("click", (e) => {
 // ── Game loop ─────────────────────────────────────────────────────────────────
 
 let lastTime = 0;
-let loopRunning = false;
 
 function loop(ts: number): void {
   const dt = Math.min((ts - lastTime) / 1000, 0.1);
   lastTime = ts;
   session.tick(dt);
   render(ctx, session.getState());
-  if (loopRunning) requestAnimationFrame(loop);
+  requestAnimationFrame(loop);
 }
 
-function startGame(startingLetters: LettreTour[]): void {
+function startGame(): void {
+  const startingLetters = getCollection();
   session = new GameSession(mapData, waveTexts, startingLetters);
 
   const panelW = 220;
@@ -231,7 +281,6 @@ function startGame(startingLetters: LettreTour[]): void {
 
   showScreen("game");
   refreshUI();
-  loopRunning = true;
   lastTime = performance.now();
   requestAnimationFrame(loop);
 }
@@ -239,77 +288,58 @@ function startGame(startingLetters: LettreTour[]): void {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  // Bonus selector
-  for (const b of ALL_BONUS_TYPES) {
-    const opt = document.createElement("option");
-    opt.value = b;
-    opt.textContent = b.replace("BOOST_", "");
-    bonusSel.appendChild(opt);
-  }
-
   // In-game buttons
-  document.getElementById("btn-invoke")!.addEventListener("click", () => {
-    const lt = session.invoquer();
-    if (lt) { log(`Invoqué: ${lt.lettre} ${lt.element}`); refreshUI(); }
-    else      log("Pas assez d'argent (10$)");
-  });
   document.getElementById("btn-launch")!.addEventListener("click", () => {
     const res = session.lancerVague();
     if (res === "ok") { log("Vague lancée !"); refreshUI(); }
     else log(res);
   });
   document.getElementById("btn-cancel-place")!.addEventListener("click", cancelPlacing);
-  document.getElementById("btn-activate-bonus")!.addEventListener("click", () => {
-    const val = bonusSel.value as BonusType;
-    if (!val) return;
-    const ok = session.activerBonus(val);
-    if (ok) { log(`Bonus activé: ${val}`); refreshUI(); }
-    else     log("Bonus déjà actif ou max 3 atteint");
-  });
 
-  // Menu buttons
-  document.getElementById("btn-solo")!.addEventListener("click", () => startGame([]));
+  // Menu navigation
+  document.getElementById("btn-solo")!.addEventListener("click", startGame);
   document.getElementById("btn-go-invocation")!.addEventListener("click", () => {
-    renderPreGameInv();
+    updateTicketDisplays();
+    renderCollection();
     showScreen("invocation");
   });
-  document.getElementById("btn-back-invocation")!.addEventListener("click", () => showScreen("menu"));
+  document.getElementById("btn-back-invocation")!.addEventListener("click", () => {
+    updateTicketDisplays();
+    showScreen("menu");
+  });
   document.getElementById("btn-go-letterbox")!.addEventListener("click", () => {
     renderLetterbox();
     showScreen("letterbox");
   });
   document.getElementById("btn-back-letterbox")!.addEventListener("click", () => showScreen("menu"));
 
-  // Invocation pre-game
-  document.getElementById("btn-pull")!.addEventListener("click", () => {
-    const lt = creerLettreTour();
-    preGameLetters.push(lt);
-    renderPreGameInv();
-    const res = document.getElementById("pull-result")!;
-    res.classList.remove("hidden");
-    const star = lt.rarete === RareteLettre.RARE ? " ⭐ RARE" : "";
-    res.textContent = `✦ ${lt.lettre} — ${lt.element}${star}`;
-  });
-  document.getElementById("btn-start-with-inv")!.addEventListener("click", () => startGame([...preGameLetters]));
+  // Invocation pulls
+  document.getElementById("btn-pull-1")!.addEventListener("click", () => doPull(1));
+  document.getElementById("btn-pull-10")!.addEventListener("click", () => doPull(10));
 
   // Discord
   try { await initDiscord(); }
   catch (e) { console.warn("Discord SDK non disponible", e); }
 
-  // Load level data (always level1 for now)
+  // Load level
   const levelName = new URLSearchParams(window.location.search).get("level") ?? "level1";
   try {
     const lvlRes  = await fetch(`/api/level/${levelName}`);
     const lvlText = await lvlRes.text();
     const lines   = lvlText.split("\n").map((l: string) => l.trim()).filter(Boolean);
-    const mapName   = lines[0];
-    const waveNames = lines.slice(1);
-    mapData   = await (async () => { const r = await fetch(`/api/map/${mapName}`); return parseMap(await r.text()); })();
-    waveTexts = await Promise.all(waveNames.map(async (wn: string) => { const r = await fetch(`/api/wave/${wn}`); return r.text(); }));
+    mapData   = await (async () => {
+      const r = await fetch(`/api/map/${lines[0]}`);
+      return parseMap(await r.text());
+    })();
+    waveTexts = await Promise.all(lines.slice(1).map(async (wn: string) => {
+      const r = await fetch(`/api/wave/${wn}`);
+      return r.text();
+    }));
   } catch (e) {
     console.error("Erreur chargement niveau:", e);
   }
 
+  updateTicketDisplays();
   showScreen("menu");
 }
 

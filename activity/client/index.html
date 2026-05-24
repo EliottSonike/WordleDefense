@@ -19,11 +19,14 @@
           <span class="menu-title-main">WordleDefense</span>
           <span class="menu-title-sub">Tower Defense × Lettres</span>
         </div>
+        <div class="menu-tickets">
+          🎫 <span id="menu-ticket-count">0</span> tickets
+        </div>
         <div class="menu-buttons">
           <button class="menu-btn" id="btn-solo">Jouer Solo</button>
           <button class="menu-btn disabled" disabled>Multijoueur <span class="soon">bientôt</span></button>
-          <button class="menu-btn secondary" id="btn-go-invocation">Invocation</button>
-          <button class="menu-btn secondary" id="btn-go-letterbox">Boîte à lettres</button>
+          <button class="menu-btn secondary" id="btn-go-invocation">✦ Invocation</button>
+          <button class="menu-btn secondary" id="btn-go-letterbox">📮 Boîte à lettres</button>
         </div>
       </div>
     </div>
@@ -33,14 +36,21 @@
       <div class="sub-screen">
         <button class="back-btn" id="btn-back-invocation">← Retour</button>
         <h2>Invocation</h2>
-        <p class="sub-desc">Invoquez des lettres avant la partie. Chaque invocation est <strong>gratuite</strong> pendant la préparation.</p>
-        <div class="inv-pull-area">
-          <button class="menu-btn pull-btn" id="btn-pull">✦ Invoquer</button>
-          <div id="pull-result" class="pull-result hidden"></div>
+
+        <div class="ticket-bar">
+          <span class="ticket-label">🎫 Tickets :</span>
+          <span id="inv-ticket-count" class="ticket-value">0</span>
         </div>
-        <h3>Lettres invoquées <span id="inv-count">(0)</span></h3>
+
+        <div class="pull-actions">
+          <button class="menu-btn pull-btn" id="btn-pull-1">Invoquer ×1 <span class="cost">1 🎫</span></button>
+          <button class="menu-btn pull-btn" id="btn-pull-10">Invoquer ×10 <span class="cost">10 🎫</span></button>
+        </div>
+
+        <div id="pull-results" class="pull-results hidden"></div>
+
+        <h3>Votre collection <span id="inv-count">(0)</span></h3>
         <div id="inv-preGame-list" class="inv-grid"></div>
-        <button class="menu-btn" id="btn-start-with-inv">Jouer avec ces lettres</button>
       </div>
     </div>
 
@@ -49,7 +59,7 @@
       <div class="sub-screen">
         <button class="back-btn" id="btn-back-letterbox">← Retour</button>
         <h2>Boîte à lettres</h2>
-        <p class="sub-desc">Votre collection de lettres disponibles pour la prochaine partie.</p>
+        <p class="sub-desc">Votre collection complète. Ces lettres sont disponibles pour la prochaine partie.</p>
         <div id="letterbox-list" class="inv-grid"></div>
         <p id="letterbox-empty" class="empty-msg">Aucune lettre — allez en invoquer !</p>
       </div>
@@ -60,33 +70,27 @@
       <canvas id="game-canvas" width="700" height="750"></canvas>
 
       <div id="panel">
+        <!-- Phase construction -->
         <div id="panel-build" class="panel-section">
-          <h3>Construction</h3>
-          <button id="btn-invoke">Invoquer lettre (10$)</button>
+          <h3>Main</h3>
           <div id="inventaire"></div>
           <hr />
-          <button id="btn-launch">Lancer la vague</button>
+          <button id="btn-launch">⚔ Lancer la vague</button>
         </div>
 
+        <!-- Phase placement -->
         <div id="panel-place" class="panel-section hidden">
           <p>Cliquez sur une case pour placer <strong id="placing-letter"></strong></p>
           <button id="btn-cancel-place">Annuler</button>
         </div>
 
-        <div id="panel-bonus" class="panel-section">
-          <h3>Bonus actifs</h3>
-          <div id="bonus-list"></div>
-          <select id="bonus-select">
-            <option value="">-- Activer un bonus --</option>
-          </select>
-          <button id="btn-activate-bonus">Activer</button>
-        </div>
-
+        <!-- Tours placées -->
         <div id="panel-towers" class="panel-section">
           <h3>Tours placées</h3>
           <div id="towers-list"></div>
         </div>
 
+        <!-- Journal -->
         <div id="log" class="panel-section">
           <h3>Journal</h3>
           <div id="log-entries"></div>
