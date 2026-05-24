@@ -258,10 +258,23 @@ body {
   color: #FFD700;
 }
 
+.pull-item.pull-upgrade {
+  border-color: #446600;
+  background: #0f1a05;
+  color: #AAFE44;
+}
+
 .pull-item.pull-error {
   border-color: #550000;
   background: #1a0505;
   color: #ff6666;
+}
+
+.pull-level {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: #FFCC44;
+  font-weight: bold;
 }
 
 .pull-badge {
@@ -389,6 +402,18 @@ button:active { background: #111135; }
 }
 
 .inv-item .info { font-size: 0.7rem; color: #bbb; }
+
+.niveau-badge {
+  margin-left: auto;
+  font-size: 0.65rem;
+  font-weight: bold;
+  color: #FFCC44;
+  background: #1a1500;
+  border: 1px solid #554400;
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
 
 .bonus-chip {
   display: inline-block;

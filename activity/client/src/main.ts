@@ -3,7 +3,7 @@ import { GameSession, Phase } from "./game/GameSession";
 import { getCouleur } from "./game/Element";
 import { RareteLettre } from "./game/RareteLettre";
 import { render, CANVAS_H } from "./game/Renderer";
-import { creerLettreTour } from "./game/LettreTourFactory";
+import { creerLettreTour, creerLettreTourFromData } from "./game/LettreTourFactory";
 import type { LettreTour } from "./game/LettreTour";
 import type { MapData } from "./game/types";
 import { parseMap } from "./game/MapParser";
@@ -43,16 +43,34 @@ function setTickets(n: number): void {
   localStorage.setItem(TICKETS_KEY, String(Math.max(0, n)));
 }
 
-// Collection persistante (lettres invoquées)
-function getCollection(): LettreTour[] {
+// Collection persistante : une entrée par clé (lettre+élément), avec niveau
+interface CollectionEntry {
+  lettre:  string;
+  element: string;
+  rarete:  string;
+  niveau:  number;
+}
+
+function entryKey(lettre: string, element: string): string { return `${lettre}-${element}`; }
+
+function getCollection(): CollectionEntry[] {
   try {
     const raw = localStorage.getItem(COLLECTION_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as LettreTour[];
+    return JSON.parse(raw) as CollectionEntry[];
   } catch { return []; }
 }
-function saveCollection(col: LettreTour[]): void {
+function saveCollection(col: CollectionEntry[]): void {
   localStorage.setItem(COLLECTION_KEY, JSON.stringify(col));
+}
+function entryToLettreTour(e: CollectionEntry): LettreTour {
+  const lt = creerLettreTourFromData(
+    e.lettre,
+    e.element as import("./game/Element").Element,
+    e.rarete  as import("./game/RareteLettre").RareteLettre,
+  );
+  lt.niveau = e.niveau;
+  return lt;
 }
 
 // ── Screen helpers ────────────────────────────────────────────────────────────
@@ -97,9 +115,7 @@ function renderCollection(): void {
   const count = document.getElementById("inv-count")!;
   count.textContent = `(${col.length})`;
   list.innerHTML = "";
-  for (const lt of col) {
-    list.appendChild(makeInvItem(lt));
-  }
+  for (const e of col) list.appendChild(makeEntryItem(e));
 }
 
 function renderLetterbox(): void {
@@ -108,9 +124,22 @@ function renderLetterbox(): void {
   const empty = document.getElementById("letterbox-empty")!;
   list.innerHTML = "";
   empty.classList.toggle("hidden", col.length > 0);
-  for (const lt of col) {
-    list.appendChild(makeInvItem(lt));
-  }
+  for (const e of col) list.appendChild(makeEntryItem(e));
+}
+
+function makeEntryItem(e: CollectionEntry): HTMLDivElement {
+  const el = document.createElement("div");
+  el.className = "inv-item";
+  const color = getCouleur(e.element as import("./game/Element").Element);
+  const rare  = e.rarete === RareteLettre.RARE;
+  el.innerHTML = `
+    <div class="badge" style="background:${color}">${e.lettre}</div>
+    <div class="info">
+      ${rare ? "⭐ RARE" : "commun"}<br/>
+      ${e.element}
+    </div>
+    <div class="niveau-badge">Nv.${e.niveau}</div>`;
+  return el;
 }
 
 function makeInvItem(lt: LettreTour): HTMLDivElement {
@@ -118,7 +147,8 @@ function makeInvItem(lt: LettreTour): HTMLDivElement {
   el.className = "inv-item";
   el.innerHTML = `
     <div class="badge" style="background:${getCouleur(lt.element)}">${lt.lettre}</div>
-    <div class="info">${lt.rarete === RareteLettre.RARE ? "⭐ RARE" : "commun"}<br/>${lt.element}</div>`;
+    <div class="info">${lt.rarete === RareteLettre.RARE ? "⭐ RARE" : "commun"}<br/>${lt.element}</div>
+    <div class="niveau-badge">Nv.${lt.niveau}</div>`;
   return el;
 }
 
@@ -131,19 +161,29 @@ function doPull(count: number): void {
   setTickets(tickets - count);
   updateTicketDisplays();
 
-  const col     = getCollection();
-  const results: LettreTour[] = [];
+  const col = getCollection();
+  const results: { entry: CollectionEntry; upgraded: boolean }[] = [];
+
   for (let i = 0; i < count; i++) {
-    const lt = creerLettreTour();
-    col.push(lt);
-    results.push(lt);
+    const lt  = creerLettreTour();
+    const key = entryKey(lt.lettre, lt.element);
+    const existing = col.find(e => entryKey(e.lettre, e.element) === key);
+    if (existing) {
+      existing.niveau++;
+      results.push({ entry: existing, upgraded: true });
+    } else {
+      const entry: CollectionEntry = { lettre: lt.lettre, element: lt.element, rarete: lt.rarete, niveau: 1 };
+      col.push(entry);
+      results.push({ entry, upgraded: false });
+    }
   }
+
   saveCollection(col);
   renderCollection();
-  showPullResults(results.map(lt => ({ lt })));
+  showPullResults(results.map(r => ({ entry: r.entry, upgraded: r.upgraded })));
 }
 
-function showPullResults(items: ({ lt: LettreTour } | { error: string })[]): void {
+function showPullResults(items: ({ entry: CollectionEntry; upgraded: boolean } | { error: string })[]): void {
   const box = document.getElementById("pull-results")!;
   box.classList.remove("hidden");
   box.innerHTML = "";
@@ -153,11 +193,14 @@ function showPullResults(items: ({ lt: LettreTour } | { error: string })[]): voi
       el.className = "pull-item pull-error";
       el.textContent = item.error;
     } else {
-      const lt = item.lt;
-      const rare = lt.rarete === RareteLettre.RARE;
-      el.className = "pull-item" + (rare ? " pull-rare" : "");
-      el.innerHTML = `<span class="pull-badge" style="background:${getCouleur(lt.element)}">${lt.lettre}</span>
-        <span>${lt.element}${rare ? " ⭐" : ""}</span>`;
+      const { entry, upgraded } = item;
+      const rare = entry.rarete === RareteLettre.RARE;
+      el.className = "pull-item" + (rare ? " pull-rare" : "") + (upgraded ? " pull-upgrade" : "");
+      const color = getCouleur(entry.element as import("./game/Element").Element);
+      el.innerHTML = `
+        <span class="pull-badge" style="background:${color}">${entry.lettre}</span>
+        <span>${entry.element}${rare ? " ⭐" : ""}</span>
+        <span class="pull-level">${upgraded ? `⬆ Nv.${entry.niveau}` : "Nv.1"}</span>`;
     }
     box.appendChild(el);
   }
@@ -270,7 +313,7 @@ function loop(ts: number): void {
 }
 
 function startGame(): void {
-  const startingLetters = getCollection();
+  const startingLetters = getCollection().map(entryToLettreTour);
   session = new GameSession(mapData, waveTexts, startingLetters);
 
   const panelW = 220;

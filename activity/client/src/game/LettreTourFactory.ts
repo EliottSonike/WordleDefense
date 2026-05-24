@@ -49,3 +49,7 @@ export function creerLettreTour(): LettreTour {
   const rarete  = RARES.includes(lettre) ? RareteLettre.RARE : RareteLettre.COMMUN;
   return new LettreTour(lettre, element, rarete, makeStatLettre(lettre));
 }
+
+export function creerLettreTourFromData(lettre: string, element: Element, rarete: RareteLettre): LettreTour {
+  return new LettreTour(lettre, element, rarete, makeStatLettre(lettre));
+}
