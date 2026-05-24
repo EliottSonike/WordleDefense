@@ -30,13 +30,12 @@ function makeTransform(rows: number, cols: number, tileSize: number): Transform 
   const mapStdH = rows * tileSize;
   const minX    = 350 - (cols / 2) * tileSize;
   const maxY    = 350 + (rows / 2) * tileSize;
-  const scaleX  = MAP_SIZE / mapStdW;
-  const scaleY  = MAP_SIZE / mapStdH;
+  const scale   = Math.min(MAP_SIZE / mapStdW, MAP_SIZE / mapStdH);
   return {
-    px:  (x) => (x - minX) * scaleX,
-    py:  (y) => HUD_H + (maxY - y) * scaleY,
-    tw:  tileSize * scaleX,
-    th:  tileSize * scaleY,
+    px:  (x) => (x - minX) * scale,
+    py:  (y) => HUD_H + (maxY - y) * scale,
+    tw:  tileSize * scale,
+    th:  tileSize * scale,
   };
 }
 
