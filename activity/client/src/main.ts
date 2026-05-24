@@ -341,6 +341,12 @@ async function main(): Promise<void> {
 
   // Menu navigation
   document.getElementById("btn-solo")!.addEventListener("click", startGame);
+  document.getElementById("btn-reset")!.addEventListener("click", () => {
+    if (!confirm("Réinitialiser toute la progression (tickets + collection) ?")) return;
+    localStorage.removeItem(TICKETS_KEY);
+    localStorage.removeItem(COLLECTION_KEY);
+    updateTicketDisplays();
+  });
   document.getElementById("btn-go-invocation")!.addEventListener("click", () => {
     updateTicketDisplays();
     renderCollection();

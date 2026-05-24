@@ -290,6 +290,15 @@ body {
   flex-shrink: 0;
 }
 
+.reset-btn {
+  font-size: 0.72rem;
+  color: #664444;
+  border-color: #442222;
+  background: #0d0808;
+  margin-top: 8px;
+}
+.reset-btn:hover { background: #1a0a0a; border-color: #883333; color: #cc8888; }
+
 .menu-tickets {
   font-size: 0.85rem;
   color: #FFCC44;
