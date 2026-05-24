@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tower Defense</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="loading">Connexion à Discord…</div>
+
+    <div id="game-container" class="hidden">
+      <canvas id="game-canvas" width="700" height="750"></canvas>
+
+      <div id="panel">
+        <div id="panel-build" class="panel-section">
+          <h3>Construction</h3>
+          <button id="btn-invoke">Invoquer lettre (10$)</button>
+          <div id="inventaire"></div>
+          <hr />
+          <button id="btn-launch">Lancer la vague</button>
+        </div>
+
+        <div id="panel-place" class="panel-section hidden">
+          <p>Cliquez sur un numéro de case pour placer <strong id="placing-letter"></strong></p>
+          <button id="btn-cancel-place">Annuler</button>
+        </div>
+
+        <div id="panel-bonus" class="panel-section">
+          <h3>Bonus actifs</h3>
+          <div id="bonus-list"></div>
+          <select id="bonus-select">
+            <option value="">-- Activer un bonus --</option>
+          </select>
+          <button id="btn-activate-bonus">Activer</button>
+        </div>
+
+        <div id="panel-towers" class="panel-section">
+          <h3>Tours placées</h3>
+          <div id="towers-list"></div>
+        </div>
+
+        <div id="log" class="panel-section">
+          <h3>Journal</h3>
+          <div id="log-entries"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

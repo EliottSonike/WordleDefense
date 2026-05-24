@@ -1,0 +1,6 @@
+activity/.env
+activity/node_modules/
+activity/server/dist/
+activity/server/server/
+*.class
+out/

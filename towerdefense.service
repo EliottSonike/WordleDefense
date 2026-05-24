@@ -1,0 +1,22 @@
+[Unit]
+Description=Tower Defense Discord Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=towerdefense
+WorkingDirectory=/opt/towerdefense
+ExecStart=/usr/bin/java \
+    -Djava.awt.headless=true \
+    -Xmx256m \
+    -cp "out:lib/JDA-5.2.1-withDependencies.jar" \
+    DiscordBot
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=towerdefense
+
+[Install]
+WantedBy=multi-user.target

@@ -1,107 +1,109 @@
 import java.util.LinkedList;
 
 public class Monstres extends Entites {
-    protected Carte map;
-    protected double speed; // Vitesse de déplacement (cases/seconde)
-    protected int reward; // Récompense donnée au joueur lorsqu'il est tué
-    protected LinkedList<Tours> cibles; // Tours potentielles à attaquer
-    protected boolean enChemin = true;
-    
-    public LinkedList<Case> getChemin() {
-        return chemin;
-    }
 
-    protected LinkedList<Case> chemin; // Chemin à suivre
-    protected int currentCaseIndex; // Index de la case actuelle sur le chemin
+    protected Carte  map;
+    protected double speed;
+    protected int    reward;
+    protected boolean enChemin = true;
+    protected LinkedList<Case> chemin;
+    protected int currentCaseIndex;
+
+    public double burnDamagePerSec  = 0.0;
+    public double burnTimeRemaining = 0.0;
+    public double slowFactor        = 1.0;
+    public double slowTimeRemaining = 0.0;
+    public double armorReduction    = 1.0;
+    public double armorTimeRemaining= 0.0;
+    public int    recoilCases       = 0;
+    public double initialPdv        = 1.0;
 
     public Monstres() {
-        this.cibles = new LinkedList<>();
         this.chemin = new LinkedList<>();
         this.currentCaseIndex = 0;
     }
 
-    
+    public LinkedList<Case> getChemin() { return chemin; }
+
     public void update(double deltaTimeSec, Player player) {
-        // Initialiser la position actuelle du monstre
-        Point2D positionActuelle = this.position;
-        double distanceParcourue = this.speed;
-    
-        // Vérifier si le monstre atteint la prochaine case sur le chemin
-        while (distanceParcourue > 0 && !chemin.isEmpty()) {
-            Case prochaineCase = chemin.peek();
-            Point2D positionProchaineCase = prochaineCase.getCentre();
-            double distanceVersProchaineCase = positionActuelle.distance(positionProchaineCase);
-    
-            if (distanceParcourue >= distanceVersProchaineCase) {
-                // Le monstre atteint la prochaine case
-                distanceParcourue -= distanceVersProchaineCase;
-                positionActuelle = positionProchaineCase;
-                chemin.poll(); // Retirer la case atteinte du chemin
-    
-                // Vérifier si le monstre atteint la base
-                if (prochaineCase.getType() == TypesCases.Base) {
-                    player.setPdv((int)player.getPdv() - (int)this.atk);; // Gérer l'arrivée du monstre à la base
+        Point2D pos = this.position;
+        double dist = this.speed * slowFactor;
+
+        while (dist > 0 && !chemin.isEmpty()) {
+            Case   next      = chemin.peek();
+            Point2D nextPos  = next.getCentre();
+            double  toNext   = pos.distance(nextPos);
+
+            if (dist >= toNext) {
+                dist -= toNext;
+                pos   = nextPos;
+                chemin.poll();
+                if (next.getType() == TypesCases.Base) {
+                    player.setPdv(player.getPdv() - (int) this.atk);
                     this.enChemin = false;
-                    return; // Arrêter la mise à jour
+                    this.position = pos;
+                    return;
                 }
             } else {
-                // Le monstre se déplace vers la prochaine case
-                double ratio = distanceParcourue / distanceVersProchaineCase;
-                double newX = positionActuelle.getX() + ratio * (positionProchaineCase.getX() - positionActuelle.getX());
-                double newY = positionActuelle.getY() + ratio * (positionProchaineCase.getY() - positionActuelle.getY());
-                positionActuelle = new Point2D(newX, newY);
-                distanceParcourue = 0; // Le déplacement est terminé pour cette mise à jour
+                double ratio = dist / toNext;
+                pos = new Point2D(
+                    pos.getX() + ratio * (nextPos.getX() - pos.getX()),
+                    pos.getY() + ratio * (nextPos.getY() - pos.getY())
+                );
+                dist = 0;
             }
         }
+        this.position = pos;
 
-        
-        // Mettre à jour la position du monstre
-        this.position = positionActuelle;
+        if (burnTimeRemaining > 0) {
+            pdv -= burnDamagePerSec * deltaTimeSec;
+            burnTimeRemaining -= deltaTimeSec;
+            if (burnTimeRemaining <= 0) { burnTimeRemaining = 0; burnDamagePerSec = 0; }
+            if (pdv < 0) pdv = 0;
+        }
+        if (slowTimeRemaining > 0) {
+            slowTimeRemaining -= deltaTimeSec;
+            if (slowTimeRemaining <= 0) { slowTimeRemaining = 0; slowFactor = 1.0; }
+        }
+        if (armorTimeRemaining > 0) {
+            armorTimeRemaining -= deltaTimeSec;
+            if (armorTimeRemaining <= 0) { armorTimeRemaining = 0; armorReduction = 1.0; }
+        }
+        if (recoilCases > 0) {
+            applyRecoil(recoilCases);
+            recoilCases = 0;
+        }
     }
-    
 
-    // Vérifie si le monstre est encore vivant
-    public boolean isAlive() {
-        return this.pdv > 0;
+    private void applyRecoil(int cases) {
+        if (map == null || chemin.isEmpty()) return;
+        LinkedList<Case> fullPath = map.getChemin();
+        Case first = chemin.peek();
+        int idx = fullPath.indexOf(first);
+        if (idx <= 0) return;
+        int start = Math.max(0, idx - cases);
+        for (int i = idx - 1; i >= start; i--) chemin.addFirst(fullPath.get(i));
     }
 
-    // Définit le chemin que le monstre doit suivre
+    public boolean isAlive()     { return pdv > 0; }
+    public boolean isEnChemin()  { return enChemin; }
+    public Carte   getMap()      { return map; }
+
     public void setChemin(LinkedList<Case> chemin) {
         if (chemin == null || chemin.isEmpty()) {
-            System.err.println("Erreur : Chemin vide ou nul passé au monstre " + name);
-        } else {
-            this.chemin = chemin;
-            this.currentCaseIndex = 0; // Réinitialise l'index du chemin
-            this.position = chemin.get(0).getCentre(); // Initialise la position au début du chemin
+            System.err.println("Chemin vide pour " + name);
+            return;
         }
+        this.chemin = chemin;
+        this.currentCaseIndex = 0;
+        this.position = chemin.get(0).getCentre();
+        this.initialPdv = this.pdv;
     }
 
-    // Gère la récompense lorsque le monstre est tué
     public void onDeath(Player player) {
-        if (isAlive()) return; // Pas de récompense si le monstre est encore en vie
+        if (isAlive()) return;
         player.recompense(this);
-        System.out.println(name + " a été tué. Récompense ajoutée !");
     }
 
-    // Dessine le monstre sur l'écran
-    public void render() {
-        if (isAlive()) {
-            StdDraw.setPenColor(this.elem.getCouleur());
-            StdDraw.filledCircle((float) position.getX(), (float) position.getY(), 10); // Taille du monstre
-        }
-    }
-
-    // Débogage pour afficher des informations sur la position
-    public void debugPosition() {
-        System.out.println("Position actuelle du monstre " + name + " : " + position);
-        System.out.println("Prochaine case cible : " + (currentCaseIndex < chemin.size() ? chemin.get(currentCaseIndex) : "Aucune"));
-    }
-
-    public Carte getMap() {
-        return map;
-    }
-
-    public boolean isEnChemin(){
-        return enChemin;
-    }
+    public void render() {}
 }
