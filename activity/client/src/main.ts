@@ -248,8 +248,13 @@ async function main(): Promise<void> {
 
   loading.classList.add("hidden");
   gameDiv.classList.remove("hidden");
-  canvas.width  = CANVAS_W;
+
+  // Fill available width without CSS scaling (no blur)
+  const panelW = 220;
+  const availW = Math.max(400, window.innerWidth - panelW - 2);
+  canvas.width  = availW;
   canvas.height = CANVAS_H;
+  canvas.style.width  = availW + "px";
 
   refreshUI();
   lastTime = performance.now();
