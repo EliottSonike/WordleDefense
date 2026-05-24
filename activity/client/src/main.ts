@@ -1,6 +1,6 @@
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import { GameSession, Phase } from "./game/GameSession";
-import { getCouleur } from "./game/Element";
+import { getCouleur, Element } from "./game/Element";
 import { RareteLettre } from "./game/RareteLettre";
 import { render, CANVAS_H } from "./game/Renderer";
 import { creerLettreTour, creerLettreTourFromData } from "./game/LettreTourFactory";
@@ -79,8 +79,8 @@ function saveDeck(deck: Record<string, string>): void {
 function entryToLettreTour(e: CollectionEntry): LettreTour {
   const lt = creerLettreTourFromData(
     e.lettre,
-    e.element as import("./game/Element").Element,
-    e.rarete  as import("./game/RareteLettre").RareteLettre,
+    e.element as Element,
+    e.rarete  as RareteLettre,
   );
   lt.niveau = e.niveau;
   return lt;
@@ -142,7 +142,7 @@ function renderCollection(): void {
     for (const e of variants) {
       const chip = document.createElement("span");
       chip.className = "elem-chip";
-      chip.style.background = getCouleur(e.element as import("./game/Element").Element);
+      chip.style.background = getCouleur(e.element as Element);
       chip.textContent = `${e.element.slice(0,3)} Nv.${e.niveau}`;
       if (e.rarete === RareteLettre.RARE) chip.classList.add("elem-rare");
       row.appendChild(chip);
@@ -176,7 +176,7 @@ function renderLetterbox(): void {
 
       if (entry) {
         btn.className = "elem-btn owned" + (selected ? " selected" : "");
-        btn.style.setProperty("--elem-color", getCouleur(entry.element as import("./game/Element").Element));
+        btn.style.setProperty("--elem-color", getCouleur(entry.element as Element));
         btn.innerHTML = `<span class="elem-btn-name">${elem.slice(0,3)}</span><span class="elem-btn-lv">Nv.${entry.niveau}</span>`;
         if (entry.rarete === RareteLettre.RARE) btn.classList.add("elem-rare");
         btn.addEventListener("click", () => {
@@ -251,7 +251,7 @@ function showPullResults(items: ({ entry: CollectionEntry; upgraded: boolean } |
       const { entry, upgraded } = item;
       const rare = entry.rarete === RareteLettre.RARE;
       el.className = "pull-item" + (rare ? " pull-rare" : "") + (upgraded ? " pull-upgrade" : "");
-      const color = getCouleur(entry.element as import("./game/Element").Element);
+      const color = getCouleur(entry.element as Element);
       el.innerHTML = `
         <span class="pull-badge" style="background:${color}">${entry.lettre}</span>
         <span>${entry.element}${rare ? " ⭐" : ""}</span>
