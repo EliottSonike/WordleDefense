@@ -46,7 +46,10 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
   const cols = map.grille[0]?.length ?? 1;
   const t    = makeTransform(rows, cols, map.tailleCase);
 
-  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+  const actualH = HUD_H + Math.ceil(rows * t.th);
+  if (ctx.canvas.height !== actualH) ctx.canvas.height = actualH;
+
+  ctx.clearRect(0, 0, CANVAS_W, actualH);
 
   // HUD
   ctx.fillStyle = "#000000";

@@ -26,10 +26,11 @@ body {
 }
 
 #game-canvas {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: calc(100% - 220px);
+  height: auto;
   max-height: 100vh;
-  width: auto;
   display: block;
   border-right: 2px solid #333;
 }
