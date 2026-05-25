@@ -4,6 +4,8 @@ import { creerLettreTour } from "./LettreTourFactory";
 import { LettreTour } from "./LettreTour";
 import { Monstre } from "./Monstres";
 import { Wave } from "./Wave";
+import { Element } from "./Element";
+import { RareteLettre } from "./RareteLettre";
 import type { MapData, Point2D } from "./types";
 import { dist } from "./types";
 
@@ -14,19 +16,37 @@ export interface Player {
   money: number;
 }
 
+export interface Projectile {
+  from:     Point2D;
+  to:       Point2D;
+  progress: number;
+  elem:     Element;
+  isRare:   boolean;
+}
+
+export interface GameStats {
+  killCount:     number;
+  ticketsEarned: number;
+  wavesCleared:  number;
+}
+
 export interface GameState {
-  phase:      Phase;
-  player:     Player;
-  monstres:   Monstre[];
-  tours:      LettreTour[];
-  inventaire: LettreTour[];
-  waveIndex:  number;
-  bm:         BonusManager;
-  map:        MapData;
-  cheminPx:   Point2D[];
+  phase:       Phase;
+  player:      Player;
+  monstres:    Monstre[];
+  tours:       LettreTour[];
+  inventaire:  LettreTour[];
+  waveIndex:   number;
+  waveCount:   number;
+  bm:          BonusManager;
+  map:         MapData;
+  cheminPx:    Point2D[];
+  projectiles: Projectile[];
+  stats:       GameStats;
 }
 
 const INVOCATION_COST = 10;
+const PROJ_SPEED      = 4.5;  // progress units/s → reaches target in ~0.22s
 
 export class GameSession {
   private phase: Phase = Phase.BUILD;
@@ -39,11 +59,13 @@ export class GameSession {
   private wave: Wave | null = null;
   private waveTexts: string[] = [];
   private cooldowns = new Map<LettreTour, number>();
+  private projectiles: Projectile[] = [];
+  private stats: GameStats = { killCount: 0, ticketsEarned: 0, wavesCleared: 0 };
 
   constructor(
     private map: MapData,
     waveTexts: string[],
-    startingLetters: import("./LettreTour").LettreTour[] = [],
+    startingLetters: LettreTour[] = [],
     activeBonuses: { type: BonusType; niveau: number }[] = [],
     wordBonusMult: number = 1.0,
   ) {
@@ -61,15 +83,18 @@ export class GameSession {
 
   getState(): GameState {
     return {
-      phase:      this.phase,
-      player:     { ...this.player },
-      monstres:   this.monstres,
-      tours:      this.tours,
-      inventaire: this.inventaire,
-      waveIndex:  this.waveIndex,
-      bm:         this.bm,
-      map:        this.map,
-      cheminPx:   this.cheminPx,
+      phase:       this.phase,
+      player:      { ...this.player },
+      monstres:    this.monstres,
+      tours:       this.tours,
+      inventaire:  this.inventaire,
+      waveIndex:   this.waveIndex,
+      waveCount:   this.waveTexts.length,
+      bm:          this.bm,
+      map:         this.map,
+      cheminPx:    this.cheminPx,
+      projectiles: this.projectiles,
+      stats:       { ...this.stats },
     };
   }
 
@@ -96,13 +121,8 @@ export class GameSession {
     return "ok";
   }
 
-  activerBonus(b: BonusType): boolean {
-    return this.bm.activer(b);
-  }
-
-  desactiverBonus(b: BonusType): void {
-    this.bm.desactiver(b);
-  }
+  activerBonus(b: BonusType): boolean  { return this.bm.activer(b); }
+  desactiverBonus(b: BonusType): void  { this.bm.desactiver(b); }
 
   lancerVague(): string {
     if (this.phase === Phase.WAVE) return "Vague déjà en cours";
@@ -115,9 +135,15 @@ export class GameSession {
   tick(dt: number): void {
     if (this.phase === Phase.OVER || this.phase === Phase.BUILD) return;
 
+    // Advance projectiles
+    this.projectiles = this.projectiles.filter(p => {
+      p.progress += PROJ_SPEED * dt;
+      return p.progress < 1.0;
+    });
+
     // Spawn
     if (this.wave) {
-      const spawned = this.wave.update(dt);
+      const spawned = this.wave.update(dt, this.waveIndex);
       for (const m of spawned) {
         m.initChemin(this.cheminPx);
         this.monstres.push(m);
@@ -131,7 +157,7 @@ export class GameSession {
     const arrived = this.monstres.filter(m => m.estArrive());
     for (const m of arrived) { this.player.pdv -= 1; m.pdv = 0; }
 
-    // Remove dead
+    // Remove dead/arrived
     this.monstres = this.monstres.filter(m => !m.estMort() && !m.estArrive());
 
     // Tower attacks
@@ -155,12 +181,25 @@ export class GameSession {
       }
 
       if (target) {
-        target.pdv -= atk * target.armorReduction;
+        const dmg = atk * target.armor * target.armorReduction;
+        target.pdv -= dmg;
+        this.stats.killCount += 0; // counted below
         t.appliquerEffetElement(target, this.bm);
         this.cooldowns.set(t, interval);
+
+        // Spawn projectile
+        this.projectiles.push({
+          from:     { ...t.position },
+          to:       { ...target.position },
+          progress: 0,
+          elem:     t.element,
+          isRare:   t.rarete === RareteLettre.RARE,
+        });
+
         if (target.estMort()) {
-          this.player.money += target.reward;
-          this.monstres = this.monstres.filter(m => m !== target);
+          this.player.money    += target.reward;
+          this.stats.killCount += 1;
+          this.monstres         = this.monstres.filter(m => m !== target);
         }
       } else {
         this.cooldowns.set(t, Math.max(newCd, 0));
@@ -172,6 +211,9 @@ export class GameSession {
 
     // Wave ended
     if (this.wave?.estTerminee() && this.monstres.length === 0) {
+      const ticketsThisWave = Math.ceil(3 + this.waveIndex * 0.5);
+      this.stats.ticketsEarned += ticketsThisWave;
+      this.stats.wavesCleared++;
       this.waveIndex++;
       this.wave = null;
       this.phase = this.waveIndex >= this.waveTexts.length ? Phase.OVER : Phase.BUILD;

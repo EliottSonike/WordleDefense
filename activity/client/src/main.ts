@@ -484,6 +484,8 @@ let session: GameSession;
 let placingIdx: number | null = null;
 let mapData: MapData    = { grille: [], tailleCase: 70, chemin: [], constructibles: [], spawn: {x:0,y:0}, base: {x:700,y:700} };
 let waveTexts: string[] = [];
+let gameRunning  = false;
+let gameOverShown = false;
 
 function log(msg: string): void {
   const el = document.createElement("div");
@@ -571,15 +573,43 @@ canvas.addEventListener("click", (e) => {
   else log(`Erreur: ${res}`);
 });
 
+// ── Game over ─────────────────────────────────────────────────────────────────
+
+function showGameOver(state: ReturnType<GameSession["getState"]>): void {
+  const isVictory = state.stats.wavesCleared >= state.waveCount;
+  document.getElementById("game-over-title")!.textContent  = isVictory ? "🏆 Victoire !" : "💀 Défaite";
+  document.getElementById("stat-waves")!.textContent   = `${state.stats.wavesCleared}/${state.waveCount}`;
+  document.getElementById("stat-kills")!.textContent   = String(state.stats.killCount);
+  document.getElementById("stat-tickets")!.textContent = String(state.stats.ticketsEarned);
+
+  if (state.stats.ticketsEarned > 0) {
+    setTickets(getTickets() + state.stats.ticketsEarned);
+    updateTicketDisplays();
+    log(`Partie terminée — +${state.stats.ticketsEarned} tickets !`);
+  }
+
+  document.getElementById("game-over")!.classList.remove("hidden");
+}
+
 // ── Game loop ─────────────────────────────────────────────────────────────────
 
 let lastTime = 0;
 
 function loop(ts: number): void {
+  if (!gameRunning) return;
   const dt = Math.min((ts - lastTime) / 1000, 0.1);
   lastTime = ts;
   session.tick(dt);
-  render(ctx, session.getState());
+  const state = session.getState();
+  render(ctx, state);
+
+  if (state.phase === Phase.OVER && !gameOverShown) {
+    gameOverShown = true;
+    gameRunning   = false;
+    showGameOver(state);
+    return;
+  }
+
   requestAnimationFrame(loop);
 }
 
@@ -632,6 +662,10 @@ async function startGame(): Promise<void> {
   canvas.height = CANVAS_H;
   canvas.style.width = availW + "px";
 
+  document.getElementById("game-over")!.classList.add("hidden");
+  gameRunning   = true;
+  gameOverShown = false;
+
   showScreen("game");
   refreshUI();
   lastTime = performance.now();
@@ -649,6 +683,14 @@ async function main(): Promise<void> {
   document.getElementById("btn-cancel-place")!.addEventListener("click", cancelPlacing);
 
   document.getElementById("btn-solo")!.addEventListener("click", () => startGame().catch(console.error));
+
+  document.getElementById("btn-back-from-game")!.addEventListener("click", () => {
+    gameRunning = false;
+    gameOverShown = false;
+    document.getElementById("game-over")!.classList.add("hidden");
+    updateTicketDisplays();
+    showScreen("menu");
+  });
 
   // Reset — double-clic (confirm() bloqué dans les iframes Discord)
   let resetClicks = 0;

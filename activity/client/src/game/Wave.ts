@@ -3,7 +3,7 @@ import { creerMonstre, Monstre } from "./Monstres";
 interface SpawnEntry { time: number; type: string }
 
 export class Wave {
-  private entries:  SpawnEntry[] = [];
+  private entries: SpawnEntry[] = [];
   private elapsed = 0.0;
   private idx     = 0;
 
@@ -21,11 +21,11 @@ export class Wave {
     return w;
   }
 
-  update(dt: number): Monstre[] {
+  update(dt: number, waveIndex = 0): Monstre[] {
     this.elapsed += dt;
     const spawned: Monstre[] = [];
     while (this.idx < this.entries.length && this.entries[this.idx].time <= this.elapsed) {
-      spawned.push(creerMonstre(this.entries[this.idx].type));
+      spawned.push(creerMonstre(this.entries[this.idx].type, waveIndex));
       this.idx++;
     }
     return spawned;

@@ -597,6 +597,49 @@ body {
   display: flex;
   height: 100vh;
   gap: 0;
+  position: relative;
+}
+
+/* ── Game Over overlay ─────────────────────────────────────── */
+#game-over {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.game-over-box {
+  background: #12121e;
+  border: 2px solid #3333aa;
+  border-radius: 12px;
+  padding: 40px 50px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-width: 280px;
+  box-shadow: 0 0 40px rgba(100,100,255,0.3);
+}
+
+#game-over-title {
+  font-size: 2rem;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+.game-over-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 1rem;
+  color: #bbbbdd;
+}
+
+.game-over-stats strong {
+  color: #ffffff;
 }
 
 #game-canvas {
