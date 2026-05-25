@@ -170,6 +170,9 @@ function renderLetterbox(): void {
   empty.classList.toggle("hidden", col.length > 0);
 
   for (const letter of ALL_LETTERS) {
+    const owned = col.filter(e => e.lettre === letter);
+    if (owned.length === 0) continue;
+
     const row = document.createElement("div");
     row.className = "letter-row";
 
@@ -179,7 +182,7 @@ function renderLetterbox(): void {
     row.appendChild(lbl);
 
     for (const elem of ALL_ELEMENTS) {
-      const entry = col.find(e => e.lettre === letter && e.element === elem);
+      const entry = owned.find(e => e.element === elem);
       const btn   = document.createElement("button");
       const selected = deck[letter] === elem;
 
@@ -190,7 +193,7 @@ function renderLetterbox(): void {
         if (entry.rarete === RareteLettre.RARE) btn.classList.add("elem-rare");
         btn.addEventListener("click", () => {
           const d = getDeck();
-          if (d[letter] === elem) delete d[letter]; // désélectionner
+          if (d[letter] === elem) delete d[letter];
           else d[letter] = elem;
           saveDeck(d);
           renderLetterbox();
