@@ -1,6 +1,6 @@
 import type { Monstre } from "./Monstres";
 
-export enum Element { FEU, EAU, TERRE, VENT, NEUTRE }
+export enum Element { FEU = "FEU", EAU = "EAU", TERRE = "TERRE", VENT = "VENT", NEUTRE = "NEUTRE" }
 
 export function getCouleur(e: Element): string {
   switch (e) {

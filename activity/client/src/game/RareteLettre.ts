@@ -1,1 +1,1 @@
-export enum RareteLettre { COMMUN, RARE }
+export enum RareteLettre { COMMUN = "COMMUN", RARE = "RARE" }
