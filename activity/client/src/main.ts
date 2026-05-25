@@ -131,34 +131,6 @@ function updateTicketDisplays(): void {
   document.getElementById("inv-ticket-count")!.textContent  = String(t);
 }
 
-/** Rendu A→Z compact pour l'écran invocation (lecture seule) */
-function renderCollection(): void {
-  const col   = getCollection();
-  const list  = document.getElementById("inv-preGame-list")!;
-  const count = document.getElementById("inv-count")!;
-  count.textContent = `(${col.length})`;
-  list.innerHTML = "";
-  // grouper par lettre
-  for (const letter of ALL_LETTERS) {
-    const variants = col.filter(e => e.lettre === letter);
-    if (variants.length === 0) continue;
-    const row = document.createElement("div");
-    row.className = "letter-row";
-    const lbl = document.createElement("span");
-    lbl.className = "letter-row-name";
-    lbl.textContent = letter;
-    row.appendChild(lbl);
-    for (const e of variants) {
-      const chip = document.createElement("span");
-      chip.className = "elem-chip";
-      chip.style.background = getCouleur(e.element as Element);
-      chip.textContent = `${e.element.slice(0,3)} Nv.${e.niveau}`;
-      if (e.rarete === RareteLettre.RARE) chip.classList.add("elem-rare");
-      row.appendChild(chip);
-    }
-    list.appendChild(row);
-  }
-}
 
 /** Rendu A→Z avec sélection d'élément (deck builder) */
 function renderLetterbox(): void {
@@ -246,7 +218,6 @@ function doPull(count: number): void {
   }
 
   saveCollection(col);
-  renderCollection();
   showPullResults(results.map(r => ({ entry: r.entry, upgraded: r.upgraded })));
 }
 
@@ -434,7 +405,6 @@ async function main(): Promise<void> {
   });
   document.getElementById("btn-go-invocation")!.addEventListener("click", () => {
     updateTicketDisplays();
-    renderCollection();
     showScreen("invocation");
   });
   document.getElementById("btn-back-invocation")!.addEventListener("click", () => {
