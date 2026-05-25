@@ -115,7 +115,6 @@ body {
 
 /* ── Sous-écrans (invocation / boîte à lettres) ──────────── */
 #screen-invocation,
-#screen-bonus,
 #screen-letterbox {
   display: flex;
   align-items: flex-start;
@@ -385,6 +384,37 @@ body {
   color: #444466;
   font-size: 0.82rem;
   font-style: italic;
+}
+
+/* ── Invocation tabs ─────────────────────────────────────────── */
+.inv-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.inv-tab {
+  flex: 1;
+  background: #0f0f22;
+  border: 1px solid #2a2a55;
+  border-radius: 5px;
+  color: #6677bb;
+  font-family: monospace;
+  font-size: 0.85rem;
+  padding: 8px 12px;
+  cursor: pointer;
+  width: auto;
+  margin-top: 0;
+  transition: background 0.12s, color 0.12s;
+  letter-spacing: 1px;
+}
+
+.inv-tab:hover { background: #1a1a33; color: #aabbff; }
+
+.inv-tab.active {
+  background: #1a1a44;
+  border-color: #5555aa;
+  color: #FFFFFF;
 }
 
 /* ── Deck tabs ───────────────────────────────────────────────── */

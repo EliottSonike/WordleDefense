@@ -25,55 +25,46 @@
         <div class="menu-buttons">
           <button class="menu-btn" id="btn-solo">Jouer Solo</button>
           <button class="menu-btn disabled" disabled>Multijoueur <span class="soon">bientôt</span></button>
-          <button class="menu-btn secondary" id="btn-go-invocation">✦ Lettres</button>
-          <button class="menu-btn secondary" id="btn-go-bonus">⚡ Bonus</button>
+          <button class="menu-btn secondary" id="btn-go-invocation">✦ Invocation</button>
           <button class="menu-btn secondary" id="btn-go-letterbox">📮 Boîte à lettres</button>
           <button class="menu-btn reset-btn" id="btn-reset">Réinitialiser la progression</button>
         </div>
       </div>
     </div>
 
-    <!-- ── Invocation lettres ─────────────────────────────────────── -->
+    <!-- ── Invocation (lettres + bonus) ──────────────────────────── -->
     <div id="screen-invocation" class="hidden">
       <div class="sub-screen">
         <button class="back-btn" id="btn-back-invocation">← Retour</button>
-        <h2>Invocation — Lettres</h2>
+        <h2>Invocation</h2>
 
         <div class="ticket-bar">
           <span class="ticket-label">🎫 Tickets :</span>
           <span id="inv-ticket-count" class="ticket-value">0</span>
         </div>
 
-        <div class="pull-actions">
-          <button class="menu-btn pull-btn" id="btn-pull-1">Invoquer ×1 <span class="cost">1 🎫</span></button>
-          <button class="menu-btn pull-btn" id="btn-pull-10">Invoquer ×10 <span class="cost">10 🎫</span></button>
+        <div class="inv-tabs">
+          <button class="inv-tab active" id="inv-tab-letters">✦ Lettres</button>
+          <button class="inv-tab" id="inv-tab-bonus">⚡ Bonus</button>
         </div>
 
-        <div id="pull-results" class="pull-results hidden"></div>
-      </div>
-    </div>
-
-    <!-- ── Portail Bonus ──────────────────────────────────────────── -->
-    <div id="screen-bonus" class="hidden">
-      <div class="sub-screen">
-        <button class="back-btn" id="btn-back-bonus">← Retour</button>
-        <h2>Invocation — Bonus</h2>
-
-        <div class="ticket-bar">
-          <span class="ticket-label">🎫 Tickets :</span>
-          <span id="bonus-ticket-count" class="ticket-value">0</span>
+        <!-- Section lettres -->
+        <div id="inv-section-letters">
+          <div class="pull-actions">
+            <button class="menu-btn pull-btn" id="btn-pull-1">Invoquer ×1 <span class="cost">1 🎫</span></button>
+            <button class="menu-btn pull-btn" id="btn-pull-10">Invoquer ×10 <span class="cost">10 🎫</span></button>
+          </div>
+          <div id="pull-results" class="pull-results hidden"></div>
         </div>
 
-        <div class="pull-actions">
-          <button class="menu-btn pull-btn" id="btn-pull-bonus-1">Invoquer ×1 <span class="cost">1 🎫</span></button>
-          <button class="menu-btn pull-btn" id="btn-pull-bonus-10">Invoquer ×10 <span class="cost">10 🎫</span></button>
+        <!-- Section bonus -->
+        <div id="inv-section-bonus" class="hidden">
+          <div class="pull-actions">
+            <button class="menu-btn pull-btn" id="btn-pull-bonus-1">Invoquer ×1 <span class="cost">1 🎫</span></button>
+            <button class="menu-btn pull-btn" id="btn-pull-bonus-10">Invoquer ×10 <span class="cost">10 🎫</span></button>
+          </div>
+          <div id="bonus-pull-results" class="pull-results hidden"></div>
         </div>
-
-        <div id="bonus-pull-results" class="pull-results hidden"></div>
-
-        <h3>Collection <span id="bonus-active-count">(0/3)</span></h3>
-        <p class="sub-desc">Cliquez sur un bonus pour l'activer (max 3). Les bonus actifs sont appliqués en partie.</p>
-        <div id="bonus-collection" class="bonus-grid"></div>
       </div>
     </div>
 
@@ -86,6 +77,13 @@
         <div id="deck-tab-bar" class="deck-tabs"></div>
         <div id="letterbox-list" class="inv-grid"></div>
         <p id="letterbox-empty" class="empty-msg">Aucune lettre — allez en invoquer !</p>
+
+        <hr />
+
+        <h3>Bonus actifs <span id="bonus-active-count">(0/3)</span></h3>
+        <p class="sub-desc">Cliquez pour activer/désactiver un bonus en partie (max 3).</p>
+        <div id="bonus-collection" class="bonus-grid"></div>
+        <p id="bonus-empty" class="empty-msg hidden">Aucun bonus — allez en invoquer !</p>
       </div>
     </div>
 
@@ -94,7 +92,6 @@
       <canvas id="game-canvas" width="700" height="750"></canvas>
 
       <div id="panel">
-        <!-- Phase construction -->
         <div id="panel-build" class="panel-section">
           <h3>Main</h3>
           <div id="inventaire"></div>
@@ -102,19 +99,16 @@
           <button id="btn-launch">⚔ Lancer la vague</button>
         </div>
 
-        <!-- Phase placement -->
         <div id="panel-place" class="panel-section hidden">
           <p>Cliquez sur une case pour placer <strong id="placing-letter"></strong></p>
           <button id="btn-cancel-place">Annuler</button>
         </div>
 
-        <!-- Tours placées -->
         <div id="panel-towers" class="panel-section">
           <h3>Tours placées</h3>
           <div id="towers-list"></div>
         </div>
 
-        <!-- Journal -->
         <div id="log" class="panel-section">
           <h3>Journal</h3>
           <div id="log-entries"></div>

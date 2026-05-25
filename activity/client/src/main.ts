@@ -146,14 +146,13 @@ function saveActiveDeckIdx(idx: number): void {
 
 // ── Screen helpers ────────────────────────────────────────────────────────────
 
-type Screen = "loading" | "menu" | "invocation" | "bonus" | "letterbox" | "game";
+type Screen = "loading" | "menu" | "invocation" | "letterbox" | "game";
 
 function showScreen(s: Screen): void {
   const ids: Record<Screen, string> = {
     loading:    "screen-loading",
     menu:       "screen-menu",
     invocation: "screen-invocation",
-    bonus:      "screen-bonus",
     letterbox:  "screen-letterbox",
     game:       "game-container",
   };
@@ -177,9 +176,8 @@ const placingLbl = document.getElementById("placing-letter")!;
 
 function updateTicketDisplays(): void {
   const t = getTickets();
-  document.getElementById("menu-ticket-count")!.textContent  = String(t);
-  document.getElementById("inv-ticket-count")!.textContent   = String(t);
-  document.getElementById("bonus-ticket-count")!.textContent = String(t);
+  document.getElementById("menu-ticket-count")!.textContent = String(t);
+  document.getElementById("inv-ticket-count")!.textContent  = String(t);
 }
 
 // ── Shared pull result display ────────────────────────────────────────────────
@@ -269,7 +267,6 @@ function doPullBonus(count: number): void {
   }
 
   saveBonusCollection(col);
-  renderBonusPortal();
   showPullResults("bonus-pull-results", items);
 }
 
@@ -283,13 +280,8 @@ function renderBonusPortal(): void {
   count.textContent = `(${active.length}/3)`;
   list.innerHTML = "";
 
-  if (col.length === 0) {
-    const p = document.createElement("p");
-    p.className = "empty-msg";
-    p.textContent = "Aucun bonus — allez en invoquer !";
-    list.appendChild(p);
-    return;
-  }
+  document.getElementById("bonus-empty")!.classList.toggle("hidden", col.length > 0);
+  if (col.length === 0) return;
 
   for (const entry of col) {
     const info     = BONUS_INFO[entry.type] ?? { label: entry.type, icon: "?", desc: "", color: "#888", rarete: "COMMUN" };
@@ -343,6 +335,7 @@ function renderLetterbox(): void {
 
   list.innerHTML = "";
   empty.classList.toggle("hidden", col.length > 0);
+
 
   for (const letter of ALL_LETTERS) {
     const owned = col.filter(e => e.lettre === letter);
@@ -551,7 +544,7 @@ async function main(): Promise<void> {
     updateTicketDisplays();
   });
 
-  // Letter invocation
+  // Invocation (lettres + bonus)
   document.getElementById("btn-go-invocation")!.addEventListener("click", () => {
     updateTicketDisplays();
     showScreen("invocation");
@@ -562,23 +555,27 @@ async function main(): Promise<void> {
   });
   document.getElementById("btn-pull-1")!.addEventListener("click",  () => doPull(1));
   document.getElementById("btn-pull-10")!.addEventListener("click", () => doPull(10));
-
-  // Bonus portal
-  document.getElementById("btn-go-bonus")!.addEventListener("click", () => {
-    updateTicketDisplays();
-    renderBonusPortal();
-    showScreen("bonus");
-  });
-  document.getElementById("btn-back-bonus")!.addEventListener("click", () => {
-    updateTicketDisplays();
-    showScreen("menu");
-  });
   document.getElementById("btn-pull-bonus-1")!.addEventListener("click",  () => doPullBonus(1));
   document.getElementById("btn-pull-bonus-10")!.addEventListener("click", () => doPullBonus(10));
 
-  // Letterbox
+  // Tab switching dans l'écran invocation
+  document.getElementById("inv-tab-letters")!.addEventListener("click", () => {
+    document.getElementById("inv-section-letters")!.classList.remove("hidden");
+    document.getElementById("inv-section-bonus")!.classList.add("hidden");
+    document.getElementById("inv-tab-letters")!.classList.add("active");
+    document.getElementById("inv-tab-bonus")!.classList.remove("active");
+  });
+  document.getElementById("inv-tab-bonus")!.addEventListener("click", () => {
+    document.getElementById("inv-section-bonus")!.classList.remove("hidden");
+    document.getElementById("inv-section-letters")!.classList.add("hidden");
+    document.getElementById("inv-tab-bonus")!.classList.add("active");
+    document.getElementById("inv-tab-letters")!.classList.remove("active");
+  });
+
+  // Letterbox (lettres + bonus actifs)
   document.getElementById("btn-go-letterbox")!.addEventListener("click", () => {
     renderLetterbox();
+    renderBonusPortal();
     showScreen("letterbox");
   });
   document.getElementById("btn-back-letterbox")!.addEventListener("click", () => showScreen("menu"));
