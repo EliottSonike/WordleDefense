@@ -8,10 +8,12 @@ import type { LettreTour } from "./game/LettreTour";
 import type { MapData } from "./game/types";
 import { parseMap } from "./game/MapParser";
 import { BonusType, ALL_BONUS_TYPES } from "./game/BonusType";
+import { BonusManager } from "./game/BonusManager";
 
 // ── Discord SDK ───────────────────────────────────────────────────────────────
 
 const sdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID ?? "");
+let currentUserId: string | null = null;
 
 async function initDiscord(): Promise<void> {
   await sdk.ready();
@@ -27,7 +29,8 @@ async function initDiscord(): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body:    JSON.stringify({ code }),
   });
-  const { access_token } = await res.json() as { access_token: string };
+  const { access_token, user_id } = await res.json() as { access_token: string; user_id: string };
+  if (user_id) currentUserId = user_id;
   await sdk.commands.authenticate({ access_token });
 }
 
@@ -87,6 +90,36 @@ function getTickets(): number {
 }
 function setTickets(n: number): void {
   localStorage.setItem(TICKETS_KEY, String(Math.max(0, n)));
+}
+
+async function syncTicketsFromServer(): Promise<void> {
+  if (!currentUserId) return;
+  try {
+    const r = await fetch(`/api/tickets/${currentUserId}`);
+    const { tickets } = await r.json() as { tickets: number };
+    setTickets(tickets);
+    updateTicketDisplays();
+  } catch { /* keep localStorage value */ }
+}
+
+async function serverSpendTickets(amount: number): Promise<void> {
+  if (!currentUserId) return;
+  try {
+    await fetch(`/api/tickets/${currentUserId}/spend`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount }),
+    });
+  } catch { /* localStorage already updated */ }
+}
+
+async function serverEarnTickets(amount: number): Promise<void> {
+  if (!currentUserId) return;
+  try {
+    await fetch(`/api/tickets/${currentUserId}/earn`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount }),
+    });
+  } catch { /* localStorage already updated */ }
 }
 
 // ── Letter collection ─────────────────────────────────────────────────────────
@@ -254,6 +287,7 @@ function doPull(count: number): void {
   }
   setTickets(tickets - count);
   updateTicketDisplays();
+  serverSpendTickets(count).catch(() => {});
 
   const col: CollectionEntry[] = getCollection();
   const items: PullItem[] = [];
@@ -286,6 +320,7 @@ function doPullBonus(count: number): void {
   }
   setTickets(tickets - count);
   updateTicketDisplays();
+  serverSpendTickets(count).catch(() => {});
 
   const col: BonusEntry[] = getBonusCollection();
   const items: PullItem[] = [];
@@ -348,6 +383,61 @@ function renderBonusPortal(): void {
 
     list.appendChild(card);
   }
+}
+
+// ── Tooltip letterbox ─────────────────────────────────────────────────────────
+
+const ELEM_EFFECT: Record<string, string> = {
+  FEU:    "🔥 Brûle (2 dégâts/s pendant 3s)",
+  EAU:    "💧 Ralentit (×0.5 vitesse, 2s)",
+  TERRE:  "🌿 Réduit armure (+25% dégâts reçus, 3s)",
+  VENT:   "💨 Recoil — recule d'1 case",
+  NEUTRE: "Pas d'effet élémentaire",
+};
+
+const tooltipEl = () => document.getElementById("tooltip")!;
+const dummyBm   = new BonusManager();
+
+function showTooltip(e: MouseEvent, entry: CollectionEntry): void {
+  const lt  = entryToLettreTour(entry);
+  const atk = lt.getStatEffective("atk",      dummyBm).toFixed(1);
+  const spd = lt.getStatEffective("atkspeed", dummyBm).toFixed(2);
+  const rng = lt.getStatEffective("range",    dummyBm).toFixed(1);
+  const col = getCouleur(entry.element as Element);
+  const rareLabel = entry.rarete === RareteLettre.RARE ? "RARE ⭐" : "Commun";
+
+  tooltipEl().innerHTML = `
+    <div class="tt-header">
+      <span class="tt-letter" style="background:${col}">${entry.lettre}</span>
+      <div class="tt-meta">
+        <div><strong>${entry.element}</strong> · ${rareLabel}</div>
+        <div>Niveau ${entry.niveau}</div>
+      </div>
+    </div>
+    <div class="tt-stats">
+      <div>⚔ ATK <strong>${atk}</strong></div>
+      <div>⚡ Vitesse <strong>${spd}</strong>/s</div>
+      <div>🎯 Portée <strong>${rng}</strong> cases</div>
+    </div>
+    <div class="tt-effect">${ELEM_EFFECT[entry.element] ?? ""}</div>`;
+
+  const tt = tooltipEl();
+  tt.classList.remove("hidden");
+  positionTooltip(e);
+}
+
+function positionTooltip(e: MouseEvent): void {
+  const tt = tooltipEl();
+  const tw = tt.offsetWidth  || 220;
+  const th = tt.offsetHeight || 140;
+  const x  = Math.min(e.clientX + 14, window.innerWidth  - tw - 8);
+  const y  = Math.min(e.clientY + 14, window.innerHeight - th - 8);
+  tt.style.left = x + "px";
+  tt.style.top  = y + "px";
+}
+
+function hideTooltip(): void {
+  tooltipEl().classList.add("hidden");
 }
 
 // ── Letterbox with ordered deck + word display ────────────────────────────────
@@ -446,6 +536,9 @@ function renderLetterbox(): void {
             const idx = ds[ai].letters.findIndex(l => l.lettre === letter && l.element === elem);
             if (idx >= 0) { ds[ai].letters.splice(idx, 1); saveDeckSlots(ds); renderLetterbox(); }
           });
+          btn.addEventListener("mouseenter", (e) => showTooltip(e, entry));
+          btn.addEventListener("mousemove",  (e) => positionTooltip(e));
+          btn.addEventListener("mouseleave", hideTooltip);
         } else {
           const canAdd = deckLetters.length < 5;
           btn.className = "elem-btn owned";
@@ -464,6 +557,9 @@ function renderLetterbox(): void {
               }
             });
           }
+          btn.addEventListener("mouseenter", (e) => showTooltip(e, entry));
+          btn.addEventListener("mousemove",  (e) => positionTooltip(e));
+          btn.addEventListener("mouseleave", hideTooltip);
         }
       } else {
         btn.className = "elem-btn locked";
@@ -482,6 +578,7 @@ function renderLetterbox(): void {
 
 let session: GameSession;
 let placingIdx: number | null = null;
+let selectedTowerIdx: number | null = null;
 let mapData: MapData    = { grille: [], tailleCase: 70, chemin: [], constructibles: [], spawn: {x:0,y:0}, base: {x:700,y:700} };
 let waveTexts: string[] = [];
 let gameRunning  = false;
@@ -513,12 +610,54 @@ function refreshUI(): void {
   renderInventaire(state.inventaire);
 
   towersDiv.innerHTML = "";
-  for (const t of state.tours) {
+  state.tours.forEach((t, i) => {
+    const isSelected = selectedTowerIdx === i;
+    const atkCost    = t.upgradeATKCost();
+    const spdCost    = t.upgradeSpeedCost();
+    const atk        = t.getStatEffective("atk", state.bm).toFixed(1);
+    const spd        = t.getStatEffective("atkspeed", state.bm).toFixed(2);
+    const col        = getCouleur(t.element);
+
     const el = document.createElement("div");
-    el.className = "tower-item";
-    el.textContent = `${t.lettre} ${t.element}${t.rarete === RareteLettre.RARE ? " ★" : ""}`;
+    el.className = "tower-item" + (isSelected ? " selected" : "");
+    el.innerHTML = `
+      <div class="tower-header">
+        <span class="tower-badge" style="background:${col}">${t.lettre}</span>
+        <span class="tower-meta">${t.element}${t.rarete === RareteLettre.RARE ? " ★" : ""}</span>
+        <span class="tower-stats-mini">⚔${atk} ⚡${spd}</span>
+      </div>
+      ${isSelected ? `<div class="tower-upgrades">
+        <button class="upg-btn" data-act="atk">
+          ⚔ ATK +25%${atkCost !== null ? ` <span class="upg-cost">${atkCost}g</span>` : " <span class='upg-max'>MAX</span>"}
+        </button>
+        <button class="upg-btn" data-act="spd">
+          ⚡ VIT +20%${spdCost !== null ? ` <span class="upg-cost">${spdCost}g</span>` : " <span class='upg-max'>MAX</span>"}
+        </button>
+        <button class="sell-btn" data-act="sell">💰 Vendre +50g → inventaire</button>
+      </div>` : ""}`;
+
+    el.addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest("[data-act]");
+      if (!btn) {
+        selectedTowerIdx = isSelected ? null : i;
+        refreshUI();
+        return;
+      }
+      const act = (btn as HTMLElement).dataset.act;
+      if (act === "atk") {
+        const res = session.upgradeATK(i);
+        log(res === "ok" ? `${t.lettre} ⚔ ATK améliorée !` : res);
+      } else if (act === "spd") {
+        const res = session.upgradeSpeed(i);
+        log(res === "ok" ? `${t.lettre} ⚡ Vitesse améliorée !` : res);
+      } else if (act === "sell") {
+        if (session.sellTower(i)) { log(`${t.lettre} vendue → inventaire (+50g)`); selectedTowerIdx = null; }
+      }
+      refreshUI();
+    });
+
     towersDiv.appendChild(el);
-  }
+  });
 
   document.getElementById("btn-launch")!.toggleAttribute("disabled", state.phase !== Phase.BUILD);
 }
@@ -585,6 +724,7 @@ function showGameOver(state: ReturnType<GameSession["getState"]>): void {
   if (state.stats.ticketsEarned > 0) {
     setTickets(getTickets() + state.stats.ticketsEarned);
     updateTicketDisplays();
+    serverEarnTickets(state.stats.ticketsEarned).catch(() => {});
     log(`Partie terminée — +${state.stats.ticketsEarned} tickets !`);
   }
 
@@ -745,8 +885,10 @@ async function main(): Promise<void> {
   document.getElementById("btn-back-letterbox")!.addEventListener("click", () => showScreen("menu"));
 
   // Discord
-  try { await initDiscord(); }
-  catch (e) { console.warn("Discord SDK non disponible", e); }
+  try {
+    await initDiscord();
+    await syncTicketsFromServer();
+  } catch (e) { console.warn("Discord SDK non disponible", e); }
 
   // Load level
   const levelName = new URLSearchParams(window.location.search).get("level") ?? "level1";

@@ -5,15 +5,41 @@ import fs from "fs";
 
 const app  = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
-
-// Chemin racine du projet (activity/../)
 const ROOT = path.resolve(__dirname, "..", "..");
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "dist")));
 
-// ── OAuth2 token exchange (requis par le Discord Embedded App SDK) ────────────
+// ── Ticket storage (JSON par Discord user ID) ─────────────────────────────────
+
+const TICKETS_FILE = path.join(__dirname, "data", "tickets.json");
+
+function readTickets(): Record<string, number> {
+  try {
+    if (!fs.existsSync(TICKETS_FILE)) return {};
+    return JSON.parse(fs.readFileSync(TICKETS_FILE, "utf8")) as Record<string, number>;
+  } catch { return {}; }
+}
+
+function saveTickets(data: Record<string, number>): void {
+  fs.mkdirSync(path.dirname(TICKETS_FILE), { recursive: true });
+  fs.writeFileSync(TICKETS_FILE, JSON.stringify(data, null, 2));
+}
+
+function getPlayerTickets(userId: string): number {
+  const data = readTickets();
+  return data[userId] ?? 30; // 30 tickets par défaut pour les nouveaux joueurs
+}
+
+function setPlayerTickets(userId: string, amount: number): void {
+  const data = readTickets();
+  data[userId] = Math.max(0, amount);
+  saveTickets(data);
+}
+
+// ── OAuth2 token exchange ─────────────────────────────────────────────────────
+
 app.post("/api/token", async (req, res) => {
   const { code } = req.body as { code: string };
   if (!code) { res.status(400).json({ error: "code manquant" }); return; }
@@ -31,14 +57,84 @@ app.post("/api/token", async (req, res) => {
     });
     const data = await r.json() as { access_token?: string; error?: string };
     if (data.error) throw new Error(data.error);
-    res.json({ access_token: data.access_token });
+
+    // Récupérer le user ID Discord
+    let userId = "";
+    let username = "";
+    try {
+      const userRes = await fetch("https://discord.com/api/users/@me", {
+        headers: { Authorization: `Bearer ${data.access_token}` }
+      });
+      const user = await userRes.json() as { id?: string; username?: string };
+      userId   = user.id ?? "";
+      username = user.username ?? "";
+    } catch { /* silently skip, userId restera vide */ }
+
+    res.json({ access_token: data.access_token, user_id: userId, username });
   } catch (e) {
     console.error("Token exchange error:", e);
     res.status(500).json({ error: "token exchange failed" });
   }
 });
 
+// ── Ticket API ────────────────────────────────────────────────────────────────
+
+// GET tickets du joueur
+app.get("/api/tickets/:userId", (req, res) => {
+  const { userId } = req.params;
+  if (!userId) { res.status(400).json({ error: "userId manquant" }); return; }
+  res.json({ tickets: getPlayerTickets(userId) });
+});
+
+// Client dépense des tickets (invocation)
+app.post("/api/tickets/:userId/spend", (req, res) => {
+  const { userId } = req.params;
+  const { amount } = req.body as { amount: number };
+  if (!userId || typeof amount !== "number" || amount <= 0 || amount > 200) {
+    res.status(400).json({ error: "paramètres invalides" }); return;
+  }
+  const current = getPlayerTickets(userId);
+  if (current < amount) { res.status(400).json({ error: "tickets insuffisants" }); return; }
+  setPlayerTickets(userId, current - amount);
+  res.json({ tickets: current - amount });
+});
+
+// Client gagne des tickets (fin de partie)
+app.post("/api/tickets/:userId/earn", (req, res) => {
+  const { userId } = req.params;
+  const { amount } = req.body as { amount: number };
+  if (!userId || typeof amount !== "number" || amount <= 0 || amount > 100) {
+    res.status(400).json({ error: "paramètres invalides" }); return;
+  }
+  const current = getPlayerTickets(userId);
+  const newTotal = current + amount;
+  setPlayerTickets(userId, newTotal);
+  res.json({ tickets: newTotal });
+});
+
+// Bot Wordle attribue des tickets (protégé par BOT_SECRET)
+app.post("/api/tickets/award", (req, res) => {
+  const { secret, userId, amount, reason } = req.body as {
+    secret: string; userId: string; amount: number; reason?: string;
+  };
+
+  const botSecret = process.env.BOT_SECRET;
+  if (!botSecret || secret !== botSecret) {
+    res.status(403).json({ error: "secret invalide" }); return;
+  }
+  if (!userId || typeof amount !== "number" || amount <= 0 || amount > 500) {
+    res.status(400).json({ error: "paramètres invalides" }); return;
+  }
+
+  const current  = getPlayerTickets(userId);
+  const newTotal = current + amount;
+  setPlayerTickets(userId, newTotal);
+  console.log(`[tickets] +${amount} → ${userId} (${reason ?? "—"}) → total: ${newTotal}`);
+  res.json({ ok: true, newTotal });
+});
+
 // ── Données de jeu ────────────────────────────────────────────────────────────
+
 app.get("/api/level/:name", (req, res) => {
   const file = path.join(ROOT, "resources", "levels", req.params.name + ".lvl");
   if (!fs.existsSync(file)) { res.status(404).send("niveau introuvable"); return; }

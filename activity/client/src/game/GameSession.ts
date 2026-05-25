@@ -124,6 +124,44 @@ export class GameSession {
   activerBonus(b: BonusType): boolean  { return this.bm.activer(b); }
   desactiverBonus(b: BonusType): void  { this.bm.desactiver(b); }
 
+  upgradeATK(tourIdx: number): string {
+    const t = this.tours[tourIdx];
+    if (!t) return "Tour invalide";
+    const cost = t.upgradeATKCost();
+    if (cost === null) return "Maximum atteint";
+    if (this.player.money < cost) return `Pas assez d'or (${cost}g requis)`;
+    this.player.money -= cost;
+    t.gameUpgrades.set("atk", (t.gameUpgrades.get("atk") ?? 0) + 1);
+    return "ok";
+  }
+
+  upgradeSpeed(tourIdx: number): string {
+    const t = this.tours[tourIdx];
+    if (!t) return "Tour invalide";
+    const cost = t.upgradeSpeedCost();
+    if (cost === null) return "Maximum atteint";
+    if (this.player.money < cost) return `Pas assez d'or (${cost}g requis)`;
+    this.player.money -= cost;
+    t.gameUpgrades.set("atkspeed", (t.gameUpgrades.get("atkspeed") ?? 0) + 1);
+    return "ok";
+  }
+
+  sellTower(tourIdx: number): boolean {
+    const t = this.tours[tourIdx];
+    if (!t || !t.position) return false;
+    const pos = t.position;
+    const cell = this.map.constructibles.find(c =>
+      !c.libre && Math.abs(c.centre.x - pos.x) < 1 && Math.abs(c.centre.y - pos.y) < 1
+    );
+    if (cell) cell.libre = true;
+    this.player.money += 50;
+    t.position = null;
+    t.gameUpgrades = new Map();
+    this.tours.splice(tourIdx, 1);
+    this.inventaire.push(t);
+    return true;
+  }
+
   lancerVague(): string {
     if (this.phase === Phase.WAVE) return "Vague déjà en cours";
     if (this.waveIndex >= this.waveTexts.length) return "Plus de vagues";

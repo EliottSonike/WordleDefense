@@ -773,9 +773,90 @@ select {
 
 .tower-item {
   font-size: 0.72rem;
-  padding: 3px 0;
-  border-bottom: 1px solid #2a2a3a;
+  padding: 4px 5px;
+  border: 1px solid #2a2a3a;
+  border-radius: 5px;
+  margin: 2px 0;
   color: #bbb;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.tower-item:hover  { border-color: #4a4a88; background: #14142a; }
+.tower-item.selected { border-color: #5577cc; background: #12182a; }
+
+.tower-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.tower-badge {
+  width: 20px; height: 20px;
+  border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: bold; font-size: 0.8rem; color: #fff; flex-shrink: 0;
+}
+.tower-meta   { flex: 1; font-size: 0.68rem; }
+.tower-stats-mini { font-size: 0.65rem; color: #9999cc; white-space: nowrap; }
+
+.tower-upgrades {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 5px;
+}
+.upg-btn, .sell-btn {
+  font-size: 0.7rem;
+  padding: 3px 6px;
+  margin: 0;
+  text-align: left;
+}
+.upg-btn  { border-color: #336633; background: #0d1a0d; color: #99ee99; }
+.upg-btn:hover  { background: #183018; border-color: #55aa55; }
+.sell-btn { border-color: #885500; background: #1a1000; color: #ddaa55; }
+.sell-btn:hover { background: #2a1800; border-color: #cc8800; }
+.upg-cost { color: #FFCC44; }
+.upg-max  { color: #666688; font-size: 0.65rem; }
+
+/* ── Tooltip letterbox ────────────────────────────────────────── */
+#tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: #0e0e22;
+  border: 1px solid #4455aa;
+  border-radius: 8px;
+  padding: 10px 14px;
+  min-width: 200px;
+  pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0,0,80,0.6);
+}
+.tt-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.tt-letter {
+  width: 30px; height: 30px;
+  border-radius: 5px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: bold; font-size: 1.1rem; color: #fff;
+  flex-shrink: 0;
+}
+.tt-meta  { font-size: 0.75rem; color: #aabbdd; line-height: 1.4; }
+.tt-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.75rem;
+  color: #ccc;
+  margin-bottom: 7px;
+}
+.tt-stats strong { color: #fff; }
+.tt-effect {
+  font-size: 0.72rem;
+  color: #8899cc;
+  border-top: 1px solid #2a2a55;
+  padding-top: 6px;
 }
 
 #log-entries {
