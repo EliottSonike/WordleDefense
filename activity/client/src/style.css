@@ -600,6 +600,56 @@ body {
   position: relative;
 }
 
+/* ── Level transition overlay ──────────────────────────────── */
+#screen-transition {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 110;
+}
+
+.transition-box {
+  background: #0d1f0d;
+  border: 2px solid #33aa44;
+  border-radius: 12px;
+  padding: 2rem 2.5rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 280px;
+}
+
+.transition-check {
+  font-size: 3rem;
+  color: #44cc66;
+}
+
+.transition-box h2 {
+  font-size: 1.5rem;
+  color: #88ffaa;
+}
+
+.transition-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+.transition-stats strong { color: #fff; }
+
+.transition-continue {
+  margin-top: 0.5rem;
+  background: #1a4a1a;
+  border-color: #33aa44;
+}
+.transition-continue:hover { background: #225522; }
+
 /* ── Game Over overlay ─────────────────────────────────────── */
 #game-over {
   position: absolute;

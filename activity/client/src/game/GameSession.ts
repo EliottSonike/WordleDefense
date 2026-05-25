@@ -9,7 +9,7 @@ import { RareteLettre } from "./RareteLettre";
 import type { MapData, Point2D } from "./types";
 import { dist } from "./types";
 
-export enum Phase { BUILD, WAVE, OVER }
+export enum Phase { BUILD, WAVE, OVER, VICTORY }
 
 export interface Player {
   pdv:   number;
@@ -38,6 +38,7 @@ export interface GameState {
   inventaire:  LettreTour[];
   waveIndex:   number;
   waveCount:   number;
+  levelIndex:  number;
   bm:          BonusManager;
   map:         MapData;
   cheminPx:    Point2D[];
@@ -68,6 +69,7 @@ export class GameSession {
     startingLetters: LettreTour[] = [],
     activeBonuses: { type: BonusType; niveau: number }[] = [],
     wordBonusMult: number = 1.0,
+    public readonly levelIndex: number = 0,
   ) {
     this.waveTexts  = waveTexts;
     this.cheminPx   = map.chemin.map(c => c.centre);
@@ -90,6 +92,7 @@ export class GameSession {
       inventaire:  this.inventaire,
       waveIndex:   this.waveIndex,
       waveCount:   this.waveTexts.length,
+      levelIndex:  this.levelIndex,
       bm:          this.bm,
       map:         this.map,
       cheminPx:    this.cheminPx,
@@ -181,7 +184,7 @@ export class GameSession {
 
     // Spawn
     if (this.wave) {
-      const spawned = this.wave.update(dt, this.waveIndex);
+      const spawned = this.wave.update(dt, this.levelIndex * 3 + this.waveIndex);
       for (const m of spawned) {
         m.initChemin(this.cheminPx);
         this.monstres.push(m);
@@ -254,7 +257,7 @@ export class GameSession {
       this.stats.wavesCleared++;
       this.waveIndex++;
       this.wave = null;
-      this.phase = this.waveIndex >= this.waveTexts.length ? Phase.OVER : Phase.BUILD;
+      this.phase = this.waveIndex >= this.waveTexts.length ? Phase.VICTORY : Phase.BUILD;
     }
   }
 }

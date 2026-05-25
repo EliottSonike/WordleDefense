@@ -579,10 +579,14 @@ function renderLetterbox(): void {
 let session: GameSession;
 let placingIdx: number | null = null;
 let selectedTowerIdx: number | null = null;
-let mapData: MapData    = { grille: [], tailleCase: 70, chemin: [], constructibles: [], spawn: {x:0,y:0}, base: {x:700,y:700} };
-let waveTexts: string[] = [];
-let gameRunning  = false;
-let gameOverShown = false;
+interface LevelData { map: MapData; waves: string[] }
+const campaignLevels: LevelData[] = [];
+let campaignLevelIdx = 0;
+interface CampaignStats { totalTickets: number; totalKills: number; levelsCleared: number }
+let campaignStats: CampaignStats = { totalTickets: 0, totalKills: 0, levelsCleared: 0 };
+let gameRunning    = false;
+let gameOverShown  = false;
+let transitionShown = false;
 
 function log(msg: string): void {
   const el = document.createElement("div");
@@ -714,21 +718,30 @@ canvas.addEventListener("click", (e) => {
 
 // ── Game over ─────────────────────────────────────────────────────────────────
 
-function showGameOver(state: ReturnType<GameSession["getState"]>): void {
-  const isVictory = state.stats.wavesCleared >= state.waveCount;
-  document.getElementById("game-over-title")!.textContent  = isVictory ? "🏆 Victoire !" : "💀 Défaite";
-  document.getElementById("stat-waves")!.textContent   = `${state.stats.wavesCleared}/${state.waveCount}`;
-  document.getElementById("stat-kills")!.textContent   = String(state.stats.killCount);
-  document.getElementById("stat-tickets")!.textContent = String(state.stats.ticketsEarned);
+function showGameOver(isFullVictory: boolean): void {
+  document.getElementById("game-over-title")!.textContent  = isFullVictory ? "🏆 Campagne complétée !" : "💀 Défaite";
+  document.getElementById("stat-waves")!.textContent   = `${campaignStats.levelsCleared}/10`;
+  document.getElementById("stat-kills")!.textContent   = String(campaignStats.totalKills);
+  document.getElementById("stat-tickets")!.textContent = String(campaignStats.totalTickets);
 
-  if (state.stats.ticketsEarned > 0) {
-    setTickets(getTickets() + state.stats.ticketsEarned);
+  if (campaignStats.totalTickets > 0) {
+    setTickets(getTickets() + campaignStats.totalTickets);
     updateTicketDisplays();
-    serverEarnTickets(state.stats.ticketsEarned).catch(() => {});
-    log(`Partie terminée — +${state.stats.ticketsEarned} tickets !`);
+    serverEarnTickets(campaignStats.totalTickets).catch(() => {});
+    log(`Run terminé — +${campaignStats.totalTickets} tickets !`);
   }
 
   document.getElementById("game-over")!.classList.remove("hidden");
+}
+
+// ── Level transition ──────────────────────────────────────────────────────────
+
+function showLevelTransition(nextIdx: number): void {
+  document.getElementById("transition-level-num")!.textContent  = String(nextIdx + 1);
+  document.getElementById("transition-kills")!.textContent      = String(campaignStats.totalKills);
+  document.getElementById("transition-tickets")!.textContent    = String(campaignStats.totalTickets);
+  document.getElementById("transition-progress")!.textContent   = `${campaignStats.levelsCleared}/10`;
+  document.getElementById("screen-transition")!.classList.remove("hidden");
 }
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
@@ -746,14 +759,31 @@ function loop(ts: number): void {
   if (state.phase === Phase.OVER && !gameOverShown) {
     gameOverShown = true;
     gameRunning   = false;
-    showGameOver(state);
+    campaignStats.totalTickets += state.stats.ticketsEarned;
+    campaignStats.totalKills   += state.stats.killCount;
+    showGameOver(false);
+    return;
+  }
+
+  if (state.phase === Phase.VICTORY && !transitionShown) {
+    transitionShown = true;
+    gameRunning = false;
+    campaignStats.totalTickets += state.stats.ticketsEarned;
+    campaignStats.totalKills   += state.stats.killCount;
+    campaignStats.levelsCleared++;
+    if (campaignLevelIdx + 1 >= campaignLevels.length) {
+      showGameOver(true);
+    } else {
+      showLevelTransition(campaignLevelIdx + 1);
+    }
     return;
   }
 
   requestAnimationFrame(loop);
 }
 
-async function startGame(): Promise<void> {
+async function startGame(levelIdx: number): Promise<void> {
+  if (!campaignLevels[levelIdx]) { console.error("Niveau manquant:", levelIdx); return; }
   const col       = getCollection();
   const decks     = getDeckSlots();
   const activeIdx = getActiveDeckIdx();
@@ -794,7 +824,8 @@ async function startGame(): Promise<void> {
     } catch { /* silently skip if server unreachable */ }
   }
 
-  session = new GameSession(mapData, waveTexts, startingLetters, activeBonuses, wbMult);
+  const lvl = campaignLevels[levelIdx];
+  session = new GameSession(lvl.map, lvl.waves, startingLetters, activeBonuses, wbMult, levelIdx);
 
   const panelW = 220;
   const availW = Math.max(400, window.innerWidth - panelW - 2);
@@ -803,8 +834,10 @@ async function startGame(): Promise<void> {
   canvas.style.width = availW + "px";
 
   document.getElementById("game-over")!.classList.add("hidden");
-  gameRunning   = true;
-  gameOverShown = false;
+  document.getElementById("screen-transition")!.classList.add("hidden");
+  gameRunning     = true;
+  gameOverShown   = false;
+  transitionShown = false;
 
   showScreen("game");
   refreshUI();
@@ -822,14 +855,30 @@ async function main(): Promise<void> {
   });
   document.getElementById("btn-cancel-place")!.addEventListener("click", cancelPlacing);
 
-  document.getElementById("btn-solo")!.addEventListener("click", () => startGame().catch(console.error));
+  document.getElementById("btn-solo")!.addEventListener("click", () => {
+    campaignLevelIdx = 0;
+    campaignStats    = { totalTickets: 0, totalKills: 0, levelsCleared: 0 };
+    transitionShown  = false;
+    startGame(0).catch(console.error);
+  });
 
   document.getElementById("btn-back-from-game")!.addEventListener("click", () => {
-    gameRunning = false;
-    gameOverShown = false;
+    gameRunning     = false;
+    gameOverShown   = false;
+    transitionShown = false;
+    campaignLevelIdx = 0;
+    campaignStats    = { totalTickets: 0, totalKills: 0, levelsCleared: 0 };
     document.getElementById("game-over")!.classList.add("hidden");
+    document.getElementById("screen-transition")!.classList.add("hidden");
     updateTicketDisplays();
     showScreen("menu");
+  });
+
+  document.getElementById("btn-continue-campaign")!.addEventListener("click", () => {
+    document.getElementById("screen-transition")!.classList.add("hidden");
+    campaignLevelIdx++;
+    transitionShown = false;
+    startGame(campaignLevelIdx).catch(console.error);
   });
 
   // Reset — double-clic (confirm() bloqué dans les iframes Discord)
@@ -890,22 +939,19 @@ async function main(): Promise<void> {
     await syncTicketsFromServer();
   } catch (e) { console.warn("Discord SDK non disponible", e); }
 
-  // Load level
-  const levelName = new URLSearchParams(window.location.search).get("level") ?? "level1";
+  // Load campaign (all 10 levels)
   try {
-    const lvlRes  = await fetch(`/api/level/${levelName}`);
-    const lvlText = await lvlRes.text();
-    const lines   = lvlText.split("\n").map((l: string) => l.trim()).filter(Boolean);
-    mapData = await (async () => {
-      const r = await fetch(`/api/map/${lines[0]}`);
-      return parseMap(await r.text());
-    })();
-    waveTexts = await Promise.all(lines.slice(1).map(async (wn: string) => {
-      const r = await fetch(`/api/wave/${wn}`);
-      return r.text();
-    }));
+    for (let i = 1; i <= 10; i++) {
+      const lvlText = await (await fetch(`/api/level/level${i}`)).text();
+      const lines   = lvlText.split("\n").map((l: string) => l.trim()).filter(Boolean);
+      const map     = parseMap(await (await fetch(`/api/map/${lines[0]}`)).text());
+      const waves   = await Promise.all(lines.slice(1).map(async (wn: string) =>
+        (await fetch(`/api/wave/${wn}`)).text()
+      ));
+      campaignLevels.push({ map, waves });
+    }
   } catch (e) {
-    console.error("Erreur chargement niveau:", e);
+    console.error("Erreur chargement campagne:", e);
   }
 
   updateTicketDisplays();

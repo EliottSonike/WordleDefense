@@ -57,7 +57,7 @@ function projSymbol(elem: Element, isRare: boolean): string {
 }
 
 export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
-  const { map, monstres, tours, player, waveIndex, waveCount, bm, phase, projectiles } = state;
+  const { map, monstres, tours, player, waveIndex, waveCount, bm, phase, projectiles, levelIndex } = state;
 
   const rows  = map.grille.length;
   const cols  = map.grille[0]?.length ?? 1;
@@ -87,7 +87,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
   ctx.fillStyle = "#FFCC00"; ctx.fillText("$", 85, mid);
   ctx.fillStyle = "#FFFFFF"; ctx.fillText(` ${player.money}`, 97, mid);
 
-  ctx.fillStyle = "#AAAADD"; ctx.fillText(`Vague ${waveIndex + 1}/${waveCount}`, 165, mid);
+  ctx.fillStyle = "#AAAADD"; ctx.fillText(`Nv.${levelIndex + 1}  Vague ${waveIndex + 1}/${waveCount}`, 165, mid);
 
   const bonusText = bm.getActifs().map((b: string) => b.replace("BOOST_", "")).join(" ") || "—";
   ctx.fillStyle = "#666699"; ctx.fillText(`✦ ${bonusText}`, 285, mid);
