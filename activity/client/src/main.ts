@@ -57,11 +57,20 @@ interface CollectionEntry {
 
 function entryKey(lettre: string, element: string): string { return `${lettre}-${element}`; }
 
+const ELEM_NAMES = ["FEU", "EAU", "TERRE", "VENT", "NEUTRE"];
+const RARETE_NAMES = ["COMMUN", "RARE"];
+
 function getCollection(): CollectionEntry[] {
   try {
     const raw = localStorage.getItem(COLLECTION_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as CollectionEntry[];
+    const col = JSON.parse(raw) as CollectionEntry[];
+    // Migrate old numeric enum values to string names
+    for (const e of col) {
+      if (typeof e.element === "number") e.element = ELEM_NAMES[e.element as unknown as number] ?? "FEU";
+      if (typeof e.rarete  === "number") e.rarete  = RARETE_NAMES[e.rarete as unknown as number] ?? "COMMUN";
+    }
+    return col;
   } catch { return []; }
 }
 function saveCollection(col: CollectionEntry[]): void {
@@ -402,11 +411,22 @@ async function main(): Promise<void> {
 
   // Menu navigation
   document.getElementById("btn-solo")!.addEventListener("click", startGame);
+  let resetClicks = 0;
   document.getElementById("btn-reset")!.addEventListener("click", () => {
-    if (!confirm("Réinitialiser toute la progression (tickets + collection) ?")) return;
+    resetClicks++;
+    if (resetClicks < 2) {
+      document.getElementById("btn-reset")!.textContent = "⚠ Cliquer encore pour confirmer";
+      setTimeout(() => {
+        resetClicks = 0;
+        document.getElementById("btn-reset")!.textContent = "Réinitialiser la progression";
+      }, 3000);
+      return;
+    }
+    resetClicks = 0;
     localStorage.removeItem(TICKETS_KEY);
     localStorage.removeItem(COLLECTION_KEY);
     localStorage.removeItem(DECK_KEY);
+    document.getElementById("btn-reset")!.textContent = "Réinitialiser la progression";
     updateTicketDisplays();
   });
   document.getElementById("btn-go-invocation")!.addEventListener("click", () => {
