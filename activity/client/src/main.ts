@@ -7,6 +7,7 @@ import { creerLettreTour, creerLettreTourFromData } from "./game/LettreTourFacto
 import type { LettreTour } from "./game/LettreTour";
 import type { MapData } from "./game/types";
 import { parseMap } from "./game/MapParser";
+import { BonusType, ALL_BONUS_TYPES } from "./game/BonusType";
 
 // ── Discord SDK ───────────────────────────────────────────────────────────────
 
@@ -30,15 +31,41 @@ async function initDiscord(): Promise<void> {
   await sdk.commands.authenticate({ access_token });
 }
 
-// ── Tickets (persistants) ─────────────────────────────────────────────────────
+// ── Storage keys ──────────────────────────────────────────────────────────────
 
-const TICKETS_KEY    = "wd_tickets";
+const TICKETS_KEY     = "wd_tickets";
 const COLLECTION_KEY  = "wd_collection";
-const DECK_KEY        = "wd_deck";
+const BONUSES_KEY     = "wd_bonuses";
+const ACTIVE_BNS_KEY  = "wd_active_bonuses";
+const DECKS_KEY       = "wd_decks";
+const ACTIVE_DECK_KEY = "wd_active_deck";
 const STARTING_TICKETS = 30;
 
-const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const ALL_LETTERS  = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const ALL_ELEMENTS = ["FEU", "EAU", "TERRE", "VENT"];
+
+// ── Interfaces ────────────────────────────────────────────────────────────────
+
+interface CollectionEntry { lettre: string; element: string; rarete: string; niveau: number }
+interface BonusEntry      { type: string; niveau: number }
+interface DeckSlot        { name: string; selections: Record<string, string> }
+
+// ── Bonus display info ────────────────────────────────────────────────────────
+
+const BONUS_INFO: Record<string, { label: string; icon: string; desc: string; color: string; rarete: string }> = {
+  BOOST_CONSONNES:  { label: "Consonnes",  icon: "C",  desc: "ATK ×1.5 pour les consonnes",       color: "#6677bb", rarete: "COMMUN" },
+  BOOST_VOYELLES:   { label: "Voyelles",   icon: "V",  desc: "Vitesse ×1.5 pour les voyelles",    color: "#9966cc", rarete: "COMMUN" },
+  BOOST_FEU:        { label: "Feu",        icon: "🔥", desc: "Durée brûlure ×2.0",               color: "#B81601", rarete: "COMMUN" },
+  BOOST_EAU:        { label: "Eau",        icon: "💧", desc: "Durée ralentissement ×2.0",        color: "#0055cc", rarete: "COMMUN" },
+  BOOST_TERRE:      { label: "Terre",      icon: "🌿", desc: "Réduction armure ×1.2",            color: "#00A70F", rarete: "COMMUN" },
+  BOOST_VENT:       { label: "Vent",       icon: "💨", desc: "Cases de recul ×2.0",              color: "#88ccdd", rarete: "COMMUN" },
+  BOOST_RARES:      { label: "Rares ★",    icon: "★",  desc: "Toutes stats ×1.3 (lettres rares)", color: "#cc9900", rarete: "RARE"   },
+  BOOST_ATK_GLOBAL: { label: "Attaque+",   icon: "⚔",  desc: "ATK ×1.2 pour toutes les tours",   color: "#aaaaff", rarete: "COMMUN" },
+};
+
+const BONUS_POOL = [...ALL_BONUS_TYPES];
+
+// ── Tickets ───────────────────────────────────────────────────────────────────
 
 function getTickets(): number {
   return parseInt(localStorage.getItem(TICKETS_KEY) ?? String(STARTING_TICKETS));
@@ -47,17 +74,9 @@ function setTickets(n: number): void {
   localStorage.setItem(TICKETS_KEY, String(Math.max(0, n)));
 }
 
-// Collection persistante : une entrée par clé (lettre+élément), avec niveau
-interface CollectionEntry {
-  lettre:  string;
-  element: string;
-  rarete:  string;
-  niveau:  number;
-}
+// ── Letter collection ─────────────────────────────────────────────────────────
 
-function entryKey(lettre: string, element: string): string { return `${lettre}-${element}`; }
-
-const ELEM_NAMES = ["FEU", "EAU", "TERRE", "VENT", "NEUTRE"];
+const ELEM_NAMES   = ["FEU", "EAU", "TERRE", "VENT", "NEUTRE"];
 const RARETE_NAMES = ["COMMUN", "RARE"];
 
 function getCollection(): CollectionEntry[] {
@@ -65,7 +84,6 @@ function getCollection(): CollectionEntry[] {
     const raw = localStorage.getItem(COLLECTION_KEY);
     if (!raw) return [];
     const col = JSON.parse(raw) as CollectionEntry[];
-    // Migrate old numeric enum values to string names
     for (const e of col) {
       if (typeof e.element === "number") e.element = ELEM_NAMES[e.element as unknown as number] ?? "FEU";
       if (typeof e.rarete  === "number") e.rarete  = RARETE_NAMES[e.rarete as unknown as number] ?? "COMMUN";
@@ -76,34 +94,66 @@ function getCollection(): CollectionEntry[] {
 function saveCollection(col: CollectionEntry[]): void {
   localStorage.setItem(COLLECTION_KEY, JSON.stringify(col));
 }
-// Deck : lettre → élément sélectionné (une seule variante par lettre en jeu)
-function getDeck(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(DECK_KEY) ?? "{}"); }
-  catch { return {}; }
-}
-function saveDeck(deck: Record<string, string>): void {
-  localStorage.setItem(DECK_KEY, JSON.stringify(deck));
-}
+function entryKey(lettre: string, element: string): string { return `${lettre}-${element}`; }
 
 function entryToLettreTour(e: CollectionEntry): LettreTour {
-  const lt = creerLettreTourFromData(
-    e.lettre,
-    e.element as Element,
-    e.rarete  as RareteLettre,
-  );
+  const lt = creerLettreTourFromData(e.lettre, e.element as Element, e.rarete as RareteLettre);
   lt.niveau = e.niveau;
   return lt;
 }
 
+// ── Bonus collection ──────────────────────────────────────────────────────────
+
+function getBonusCollection(): BonusEntry[] {
+  try { return JSON.parse(localStorage.getItem(BONUSES_KEY) ?? "[]") as BonusEntry[]; }
+  catch { return []; }
+}
+function saveBonusCollection(col: BonusEntry[]): void {
+  localStorage.setItem(BONUSES_KEY, JSON.stringify(col));
+}
+function getActiveBonuses(): string[] {
+  try { return JSON.parse(localStorage.getItem(ACTIVE_BNS_KEY) ?? "[]") as string[]; }
+  catch { return []; }
+}
+function saveActiveBonuses(active: string[]): void {
+  localStorage.setItem(ACTIVE_BNS_KEY, JSON.stringify(active));
+}
+
+// ── Deck slots ────────────────────────────────────────────────────────────────
+
+const DEFAULT_DECKS: DeckSlot[] = [
+  { name: "Deck 1", selections: {} },
+  { name: "Deck 2", selections: {} },
+  { name: "Deck 3", selections: {} },
+];
+
+function getDeckSlots(): DeckSlot[] {
+  try {
+    const raw = localStorage.getItem(DECKS_KEY);
+    if (!raw) return DEFAULT_DECKS.map(d => ({ ...d, selections: {} }));
+    return JSON.parse(raw) as DeckSlot[];
+  } catch { return DEFAULT_DECKS.map(d => ({ ...d, selections: {} })); }
+}
+function saveDeckSlots(decks: DeckSlot[]): void {
+  localStorage.setItem(DECKS_KEY, JSON.stringify(decks));
+}
+function getActiveDeckIdx(): number {
+  return parseInt(localStorage.getItem(ACTIVE_DECK_KEY) ?? "0");
+}
+function saveActiveDeckIdx(idx: number): void {
+  localStorage.setItem(ACTIVE_DECK_KEY, String(idx));
+}
+
 // ── Screen helpers ────────────────────────────────────────────────────────────
 
-type Screen = "loading" | "menu" | "invocation" | "letterbox" | "game";
+type Screen = "loading" | "menu" | "invocation" | "bonus" | "letterbox" | "game";
 
 function showScreen(s: Screen): void {
   const ids: Record<Screen, string> = {
     loading:    "screen-loading",
     menu:       "screen-menu",
     invocation: "screen-invocation",
+    bonus:      "screen-bonus",
     letterbox:  "screen-letterbox",
     game:       "game-container",
   };
@@ -123,21 +173,174 @@ const panelBuild = document.getElementById("panel-build")!;
 const panelPlace = document.getElementById("panel-place")!;
 const placingLbl = document.getElementById("placing-letter")!;
 
-// ── Ticket / collection UI ────────────────────────────────────────────────────
+// ── Ticket UI ─────────────────────────────────────────────────────────────────
 
 function updateTicketDisplays(): void {
   const t = getTickets();
-  document.getElementById("menu-ticket-count")!.textContent = String(t);
-  document.getElementById("inv-ticket-count")!.textContent  = String(t);
+  document.getElementById("menu-ticket-count")!.textContent  = String(t);
+  document.getElementById("inv-ticket-count")!.textContent   = String(t);
+  document.getElementById("bonus-ticket-count")!.textContent = String(t);
 }
 
+// ── Shared pull result display ────────────────────────────────────────────────
 
-/** Rendu A→Z avec sélection d'élément (deck builder) */
+type PullItem =
+  | { label: string; sublabel: string; color: string; upgraded: boolean; rare: boolean; niveau: number }
+  | { error: string };
+
+function showPullResults(containerId: string, items: PullItem[]): void {
+  const box = document.getElementById(containerId)!;
+  box.classList.remove("hidden");
+  box.innerHTML = "";
+  for (const item of items) {
+    const el = document.createElement("div");
+    if ("error" in item) {
+      el.className = "pull-item pull-error";
+      el.textContent = item.error;
+    } else {
+      const { label, sublabel, color, upgraded, rare, niveau } = item;
+      el.className = "pull-item" + (rare ? " pull-rare" : "") + (upgraded ? " pull-upgrade" : "");
+      el.innerHTML = `
+        <span class="pull-badge" style="background:${color}">${label}</span>
+        <span>${sublabel}${rare ? " ⭐" : ""}</span>
+        <span class="pull-level">${upgraded ? `⬆ Nv.${niveau}` : "Nv.1"}</span>`;
+    }
+    box.appendChild(el);
+  }
+}
+
+// ── Letter invocation ─────────────────────────────────────────────────────────
+
+function doPull(count: number): void {
+  const tickets = getTickets();
+  if (tickets < count) {
+    showPullResults("pull-results", [{ error: `Pas assez de tickets (${tickets}/${count})` }]);
+    return;
+  }
+  setTickets(tickets - count);
+  updateTicketDisplays();
+
+  const col: CollectionEntry[] = getCollection();
+  const items: PullItem[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const lt  = creerLettreTour();
+    const key = entryKey(lt.lettre, lt.element);
+    const existing = col.find(e => entryKey(e.lettre, e.element) === key);
+    if (existing) {
+      existing.niveau++;
+      items.push({ label: lt.lettre, sublabel: lt.element, color: getCouleur(lt.element as Element), upgraded: true, rare: lt.rarete === RareteLettre.RARE, niveau: existing.niveau });
+    } else {
+      const entry: CollectionEntry = { lettre: lt.lettre, element: lt.element, rarete: lt.rarete, niveau: 1 };
+      col.push(entry);
+      items.push({ label: lt.lettre, sublabel: lt.element, color: getCouleur(lt.element as Element), upgraded: false, rare: lt.rarete === RareteLettre.RARE, niveau: 1 });
+    }
+  }
+
+  saveCollection(col);
+  showPullResults("pull-results", items);
+}
+
+// ── Bonus invocation ──────────────────────────────────────────────────────────
+
+function doPullBonus(count: number): void {
+  const tickets = getTickets();
+  if (tickets < count) {
+    showPullResults("bonus-pull-results", [{ error: `Pas assez de tickets (${tickets}/${count})` }]);
+    return;
+  }
+  setTickets(tickets - count);
+  updateTicketDisplays();
+
+  const col: BonusEntry[] = getBonusCollection();
+  const items: PullItem[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const type = BONUS_POOL[Math.floor(Math.random() * BONUS_POOL.length)];
+    const info = BONUS_INFO[type] ?? { label: type, icon: "?", desc: "", color: "#888", rarete: "COMMUN" };
+    const existing = col.find(e => e.type === type);
+    if (existing) {
+      existing.niveau++;
+      items.push({ label: info.icon, sublabel: info.label, color: info.color, upgraded: true, rare: info.rarete === "RARE", niveau: existing.niveau });
+    } else {
+      col.push({ type, niveau: 1 });
+      items.push({ label: info.icon, sublabel: info.label, color: info.color, upgraded: false, rare: info.rarete === "RARE", niveau: 1 });
+    }
+  }
+
+  saveBonusCollection(col);
+  renderBonusPortal();
+  showPullResults("bonus-pull-results", items);
+}
+
+// ── Bonus portal ──────────────────────────────────────────────────────────────
+
+function renderBonusPortal(): void {
+  const col    = getBonusCollection();
+  const active = getActiveBonuses();
+  const list   = document.getElementById("bonus-collection")!;
+  const count  = document.getElementById("bonus-active-count")!;
+  count.textContent = `(${active.length}/3)`;
+  list.innerHTML = "";
+
+  if (col.length === 0) {
+    const p = document.createElement("p");
+    p.className = "empty-msg";
+    p.textContent = "Aucun bonus — allez en invoquer !";
+    list.appendChild(p);
+    return;
+  }
+
+  for (const entry of col) {
+    const info     = BONUS_INFO[entry.type] ?? { label: entry.type, icon: "?", desc: "", color: "#888", rarete: "COMMUN" };
+    const isActive = active.includes(entry.type);
+    const card     = document.createElement("div");
+    card.className = "bonus-card"
+      + (isActive ? " active" : "")
+      + (info.rarete === "RARE" ? " bonus-rare" : "");
+
+    card.innerHTML = `
+      <div class="bonus-icon" style="background:${info.color}33; border:1px solid ${info.color}66">${info.icon}</div>
+      <div class="bonus-info">
+        <div class="bonus-name">${info.label}</div>
+        <div class="bonus-desc">${info.desc}</div>
+      </div>
+      <div class="niveau-badge">Nv.${entry.niveau}</div>
+      ${isActive ? '<div class="bonus-active-badge">ACTIF</div>' : ""}`;
+
+    card.addEventListener("click", () => {
+      const a = getActiveBonuses();
+      const idx = a.indexOf(entry.type);
+      if (idx >= 0) a.splice(idx, 1);
+      else if (a.length < 3) a.push(entry.type);
+      saveActiveBonuses(a);
+      renderBonusPortal();
+    });
+
+    list.appendChild(card);
+  }
+}
+
+// ── Letterbox with deck tabs ──────────────────────────────────────────────────
+
 function renderLetterbox(): void {
-  const col   = getCollection();
-  const list  = document.getElementById("letterbox-list")!;
-  const empty = document.getElementById("letterbox-empty")!;
-  const deck  = getDeck();
+  const col       = getCollection();
+  const decks     = getDeckSlots();
+  const activeIdx = getActiveDeckIdx();
+  const deck      = decks[activeIdx]?.selections ?? {};
+  const tabBar    = document.getElementById("deck-tab-bar")!;
+  const list      = document.getElementById("letterbox-list")!;
+  const empty     = document.getElementById("letterbox-empty")!;
+
+  tabBar.innerHTML = "";
+  decks.forEach((d, i) => {
+    const btn = document.createElement("button");
+    btn.className = "deck-tab" + (i === activeIdx ? " active" : "");
+    btn.textContent = d.name;
+    btn.addEventListener("click", () => { saveActiveDeckIdx(i); renderLetterbox(); });
+    tabBar.appendChild(btn);
+  });
+
   list.innerHTML = "";
   empty.classList.toggle("hidden", col.length > 0);
 
@@ -147,15 +350,14 @@ function renderLetterbox(): void {
 
     const row = document.createElement("div");
     row.className = "letter-row";
-
     const lbl = document.createElement("span");
     lbl.className = "letter-row-name";
     lbl.textContent = letter;
     row.appendChild(lbl);
 
     for (const elem of ALL_ELEMENTS) {
-      const entry = owned.find(e => e.element === elem);
-      const btn   = document.createElement("button");
+      const entry   = owned.find(e => e.element === elem);
+      const btn     = document.createElement("button");
       const selected = deck[letter] === elem;
 
       if (entry) {
@@ -164,83 +366,22 @@ function renderLetterbox(): void {
         btn.innerHTML = `<span class="elem-btn-name">${elem.slice(0,3)}</span><span class="elem-btn-lv">Nv.${entry.niveau}</span>`;
         if (entry.rarete === RareteLettre.RARE) btn.classList.add("elem-rare");
         btn.addEventListener("click", () => {
-          const d = getDeck();
-          if (d[letter] === elem) delete d[letter];
-          else d[letter] = elem;
-          saveDeck(d);
+          const ds  = getDeckSlots();
+          const ai  = getActiveDeckIdx();
+          const sel = ds[ai].selections;
+          if (sel[letter] === elem) delete sel[letter];
+          else sel[letter] = elem;
+          saveDeckSlots(ds);
           renderLetterbox();
         });
       } else {
         btn.className = "elem-btn locked";
-        btn.disabled = true;
+        btn.disabled  = true;
         btn.textContent = elem.slice(0,3);
       }
       row.appendChild(btn);
     }
     list.appendChild(row);
-  }
-}
-
-function makeInvItem(lt: LettreTour): HTMLDivElement {
-  const el = document.createElement("div");
-  el.className = "inv-item";
-  el.innerHTML = `
-    <div class="badge" style="background:${getCouleur(lt.element)}">${lt.lettre}</div>
-    <div class="info">${lt.rarete === RareteLettre.RARE ? "⭐ RARE" : "commun"}<br/>${lt.element}</div>
-    <div class="niveau-badge">Nv.${lt.niveau}</div>`;
-  return el;
-}
-
-function doPull(count: number): void {
-  const tickets = getTickets();
-  if (tickets < count) {
-    showPullResults([{ error: `Pas assez de tickets (${tickets}/${count})` }]);
-    return;
-  }
-  setTickets(tickets - count);
-  updateTicketDisplays();
-
-  const col = getCollection();
-  const results: { entry: CollectionEntry; upgraded: boolean }[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const lt  = creerLettreTour();
-    const key = entryKey(lt.lettre, lt.element);
-    const existing = col.find(e => entryKey(e.lettre, e.element) === key);
-    if (existing) {
-      existing.niveau++;
-      results.push({ entry: existing, upgraded: true });
-    } else {
-      const entry: CollectionEntry = { lettre: lt.lettre, element: lt.element, rarete: lt.rarete, niveau: 1 };
-      col.push(entry);
-      results.push({ entry, upgraded: false });
-    }
-  }
-
-  saveCollection(col);
-  showPullResults(results.map(r => ({ entry: r.entry, upgraded: r.upgraded })));
-}
-
-function showPullResults(items: ({ entry: CollectionEntry; upgraded: boolean } | { error: string })[]): void {
-  const box = document.getElementById("pull-results")!;
-  box.classList.remove("hidden");
-  box.innerHTML = "";
-  for (const item of items) {
-    const el = document.createElement("div");
-    if ("error" in item) {
-      el.className = "pull-item pull-error";
-      el.textContent = item.error;
-    } else {
-      const { entry, upgraded } = item;
-      const rare = entry.rarete === RareteLettre.RARE;
-      el.className = "pull-item" + (rare ? " pull-rare" : "") + (upgraded ? " pull-upgrade" : "");
-      const color = getCouleur(entry.element as Element);
-      el.innerHTML = `
-        <span class="pull-badge" style="background:${color}">${entry.lettre}</span>
-        <span>${entry.element}${rare ? " ⭐" : ""}</span>
-        <span class="pull-level">${upgraded ? `⬆ Nv.${entry.niveau}` : "Nv.1"}</span>`;
-    }
-    box.appendChild(el);
   }
 }
 
@@ -284,8 +425,7 @@ function refreshUI(): void {
     towersDiv.appendChild(el);
   }
 
-  const inBuild = state.phase === Phase.BUILD;
-  document.getElementById("btn-launch")!.toggleAttribute("disabled", !inBuild);
+  document.getElementById("btn-launch")!.toggleAttribute("disabled", state.phase !== Phase.BUILD);
 }
 
 // ── Placing flow ──────────────────────────────────────────────────────────────
@@ -310,7 +450,7 @@ function cancelPlacing(): void {
 
 canvas.addEventListener("click", (e) => {
   if (placingIdx === null) return;
-  const rect  = canvas.getBoundingClientRect();
+  const rect   = canvas.getBoundingClientRect();
   const scaleX = canvas.width  / rect.width;
   const scaleY = canvas.height / rect.height;
   const canvasX = (e.clientX - rect.left) * scaleX;
@@ -335,7 +475,7 @@ canvas.addEventListener("click", (e) => {
 
   const res = session.placerTour(placingIdx, cIdx);
   if (res === "ok") { log(`Tour placée sur case ${cIdx}`); cancelPlacing(); }
-  else               log(`Erreur: ${res}`);
+  else log(`Erreur: ${res}`);
 });
 
 // ── Game loop ─────────────────────────────────────────────────────────────────
@@ -351,14 +491,24 @@ function loop(ts: number): void {
 }
 
 function startGame(): void {
-  const col   = getCollection();
-  const deck  = getDeck();
-  // Lettres du deck sélectionné (une variante par lettre), sinon toutes
+  const col       = getCollection();
+  const decks     = getDeckSlots();
+  const activeIdx = getActiveDeckIdx();
+  const deck      = decks[activeIdx]?.selections ?? {};
+
   const deckEntries = Object.entries(deck)
     .map(([lettre, element]) => col.find(e => e.lettre === lettre && e.element === element))
     .filter((e): e is CollectionEntry => e !== undefined);
   const startingLetters = (deckEntries.length > 0 ? deckEntries : col).map(entryToLettreTour);
-  session = new GameSession(mapData, waveTexts, startingLetters);
+
+  const bonusCol    = getBonusCollection();
+  const activeIds   = getActiveBonuses();
+  const activeBonuses = activeIds
+    .map(id => bonusCol.find(b => b.type === id))
+    .filter((b): b is BonusEntry => b !== undefined)
+    .map(b => ({ type: b.type as BonusType, niveau: b.niveau }));
+
+  session = new GameSession(mapData, waveTexts, startingLetters, activeBonuses);
 
   const panelW = 220;
   const availW = Math.max(400, window.innerWidth - panelW - 2);
@@ -375,7 +525,6 @@ function startGame(): void {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  // In-game buttons
   document.getElementById("btn-launch")!.addEventListener("click", () => {
     const res = session.lancerVague();
     if (res === "ok") { log("Vague lancée !"); refreshUI(); }
@@ -383,26 +532,26 @@ async function main(): Promise<void> {
   });
   document.getElementById("btn-cancel-place")!.addEventListener("click", cancelPlacing);
 
-  // Menu navigation
   document.getElementById("btn-solo")!.addEventListener("click", startGame);
+
+  // Reset — double-clic (confirm() bloqué dans les iframes Discord)
   let resetClicks = 0;
-  document.getElementById("btn-reset")!.addEventListener("click", () => {
+  const btnReset = document.getElementById("btn-reset")!;
+  btnReset.addEventListener("click", () => {
     resetClicks++;
     if (resetClicks < 2) {
-      document.getElementById("btn-reset")!.textContent = "⚠ Cliquer encore pour confirmer";
-      setTimeout(() => {
-        resetClicks = 0;
-        document.getElementById("btn-reset")!.textContent = "Réinitialiser la progression";
-      }, 3000);
+      btnReset.textContent = "⚠ Cliquer encore pour confirmer";
+      setTimeout(() => { resetClicks = 0; btnReset.textContent = "Réinitialiser la progression"; }, 3000);
       return;
     }
     resetClicks = 0;
-    localStorage.removeItem(TICKETS_KEY);
-    localStorage.removeItem(COLLECTION_KEY);
-    localStorage.removeItem(DECK_KEY);
-    document.getElementById("btn-reset")!.textContent = "Réinitialiser la progression";
+    ["wd_deck", TICKETS_KEY, COLLECTION_KEY, BONUSES_KEY, ACTIVE_BNS_KEY, DECKS_KEY, ACTIVE_DECK_KEY]
+      .forEach(k => localStorage.removeItem(k));
+    btnReset.textContent = "Réinitialiser la progression";
     updateTicketDisplays();
   });
+
+  // Letter invocation
   document.getElementById("btn-go-invocation")!.addEventListener("click", () => {
     updateTicketDisplays();
     showScreen("invocation");
@@ -411,15 +560,28 @@ async function main(): Promise<void> {
     updateTicketDisplays();
     showScreen("menu");
   });
+  document.getElementById("btn-pull-1")!.addEventListener("click",  () => doPull(1));
+  document.getElementById("btn-pull-10")!.addEventListener("click", () => doPull(10));
+
+  // Bonus portal
+  document.getElementById("btn-go-bonus")!.addEventListener("click", () => {
+    updateTicketDisplays();
+    renderBonusPortal();
+    showScreen("bonus");
+  });
+  document.getElementById("btn-back-bonus")!.addEventListener("click", () => {
+    updateTicketDisplays();
+    showScreen("menu");
+  });
+  document.getElementById("btn-pull-bonus-1")!.addEventListener("click",  () => doPullBonus(1));
+  document.getElementById("btn-pull-bonus-10")!.addEventListener("click", () => doPullBonus(10));
+
+  // Letterbox
   document.getElementById("btn-go-letterbox")!.addEventListener("click", () => {
     renderLetterbox();
     showScreen("letterbox");
   });
   document.getElementById("btn-back-letterbox")!.addEventListener("click", () => showScreen("menu"));
-
-  // Invocation pulls
-  document.getElementById("btn-pull-1")!.addEventListener("click", () => doPull(1));
-  document.getElementById("btn-pull-10")!.addEventListener("click", () => doPull(10));
 
   // Discord
   try { await initDiscord(); }
@@ -431,7 +593,7 @@ async function main(): Promise<void> {
     const lvlRes  = await fetch(`/api/level/${levelName}`);
     const lvlText = await lvlRes.text();
     const lines   = lvlText.split("\n").map((l: string) => l.trim()).filter(Boolean);
-    mapData   = await (async () => {
+    mapData = await (async () => {
       const r = await fetch(`/api/map/${lines[0]}`);
       return parseMap(await r.text());
     })();

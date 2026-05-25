@@ -115,6 +115,7 @@ body {
 
 /* ── Sous-écrans (invocation / boîte à lettres) ──────────── */
 #screen-invocation,
+#screen-bonus,
 #screen-letterbox {
   display: flex;
   align-items: flex-start;
@@ -384,6 +385,96 @@ body {
   color: #444466;
   font-size: 0.82rem;
   font-style: italic;
+}
+
+/* ── Deck tabs ───────────────────────────────────────────────── */
+.deck-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.deck-tab {
+  flex: 1;
+  background: #0f0f22;
+  border: 1px solid #2a2a55;
+  border-radius: 5px 5px 0 0;
+  color: #6677bb;
+  font-family: monospace;
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  cursor: pointer;
+  width: auto;
+  margin-top: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.deck-tab:hover { background: #1a1a33; color: #aabbff; }
+
+.deck-tab.active {
+  background: #1a1a44;
+  border-color: #5555aa;
+  color: #FFFFFF;
+  border-bottom-color: #1a1a44;
+}
+
+/* ── Bonus portal ────────────────────────────────────────────── */
+.bonus-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bonus-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #2a2a55;
+  background: #0f0f22;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.bonus-card:hover { border-color: #4444aa; background: #141430; }
+
+.bonus-card.active {
+  border-color: #7777ff;
+  background: #1a1a44;
+  box-shadow: 0 0 6px rgba(100,100,255,0.25);
+}
+
+.bonus-card.bonus-rare { outline: 1px solid #997700; }
+.bonus-card.active.bonus-rare { outline-color: #FFD700; }
+
+.bonus-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: bold;
+  flex-shrink: 0;
+  color: white;
+}
+
+.bonus-info { flex: 1; min-width: 0; }
+.bonus-name { font-size: 0.85rem; font-weight: bold; color: #DDDDFF; }
+.bonus-desc { font-size: 0.68rem; color: #7788aa; margin-top: 1px; }
+
+.bonus-active-badge {
+  font-size: 0.6rem;
+  font-weight: bold;
+  color: #aaaaff;
+  background: #2a2a66;
+  border: 1px solid #5555cc;
+  border-radius: 3px;
+  padding: 2px 5px;
+  letter-spacing: 1px;
+  flex-shrink: 0;
 }
 
 .hidden { display: none !important; }

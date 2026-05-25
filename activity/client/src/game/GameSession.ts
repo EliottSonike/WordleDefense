@@ -44,10 +44,15 @@ export class GameSession {
     private map: MapData,
     waveTexts: string[],
     startingLetters: import("./LettreTour").LettreTour[] = [],
+    activeBonuses: { type: BonusType; niveau: number }[] = [],
   ) {
     this.waveTexts  = waveTexts;
     this.cheminPx   = map.chemin.map(c => c.centre);
     this.inventaire = [...startingLetters];
+    for (const { type, niveau } of activeBonuses) {
+      this.bm.activer(type);
+      this.bm.setNiveau(type, niveau);
+    }
   }
 
   private cheminPx: Point2D[];
