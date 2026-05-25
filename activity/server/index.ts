@@ -3,6 +3,21 @@ import cors from "cors";
 import path from "path";
 import fs from "fs";
 
+// Charge le .env manuellement (tsx ne le fait pas automatiquement)
+try {
+  const envPath = path.join(__dirname, "..", ".env");
+  const lines   = fs.readFileSync(envPath, "utf8").split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq < 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim();
+    if (key && !(key in process.env)) process.env[key] = val;
+  }
+} catch { /* pas de .env, on continue avec les vars système */ }
+
 const app  = express();
 const PORT = parseInt(process.env.PORT ?? "3001");
 const ROOT = path.resolve(__dirname, "..", "..");
