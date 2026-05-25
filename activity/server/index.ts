@@ -57,6 +57,46 @@ app.get("/api/wave/:name", (req, res) => {
   res.type("text").send(fs.readFileSync(file, "utf8"));
 });
 
+// ── Dictionnaire Scrabble (5 lettres) ────────────────────────────────────────
+
+let WORDS5: Set<string> = new Set();
+const WORDS_CACHE = path.join(__dirname, "data", "words5.json");
+
+const SCRABBLE: Record<string, number> = {
+  A:1,E:1,I:1,O:1,U:1,L:1,N:1,S:1,T:1,R:1,
+  D:2,G:2,B:3,C:3,M:3,P:3,F:4,H:4,V:4,W:4,Y:4,
+  K:5,J:8,X:8,Q:10,Z:10,
+};
+function scrabbleScore(w: string): number {
+  return [...w.toUpperCase()].reduce((s, c) => s + (SCRABBLE[c] ?? 0), 0);
+}
+
+(async () => {
+  try {
+    if (fs.existsSync(WORDS_CACHE)) {
+      WORDS5 = new Set(JSON.parse(fs.readFileSync(WORDS_CACHE, "utf8")) as string[]);
+      console.log(`Word list: ${WORDS5.size} words (cache)`);
+      return;
+    }
+    console.log("Fetching word list…");
+    const r = await fetch("https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt");
+    const words = (await r.text()).split(/\r?\n/)
+      .map(w => w.trim().toUpperCase())
+      .filter(w => w.length === 5 && /^[A-Z]{5}$/.test(w));
+    WORDS5 = new Set(words);
+    fs.mkdirSync(path.dirname(WORDS_CACHE), { recursive: true });
+    fs.writeFileSync(WORDS_CACHE, JSON.stringify([...WORDS5]));
+    console.log(`Word list: ${WORDS5.size} words (fetched & cached)`);
+  } catch (e) { console.warn("Word list unavailable:", e); }
+})();
+
+app.get("/api/check-word/:word", (req, res) => {
+  const w = (req.params.word ?? "").toUpperCase();
+  if (!/^[A-Z]{5}$/.test(w)) { res.json({ valid: false, score: 0 }); return; }
+  const valid = WORDS5.has(w);
+  res.json({ valid, score: valid ? scrabbleScore(w) : 0 });
+});
+
 // SPA fallback
 app.get("*", (_, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));

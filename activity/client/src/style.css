@@ -448,6 +448,90 @@ body {
   border-bottom-color: #1a1a44;
 }
 
+/* ── Word deck slots ─────────────────────────────────────────── */
+.word-slots-container {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.word-slot {
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #2a2a55;
+  background: #0f0f22;
+  flex-shrink: 0;
+}
+
+.word-slot.empty {
+  color: #2a2a55;
+  font-size: 1.6rem;
+  cursor: default;
+}
+
+.word-slot.filled {
+  background: color-mix(in srgb, var(--slot-color) 22%, #0d0d22);
+  border-color: color-mix(in srgb, var(--slot-color) 60%, transparent);
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.word-slot.filled:hover { opacity: 0.7; }
+
+.slot-letter {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #FFFFFF;
+  line-height: 1;
+}
+
+.slot-elem {
+  font-size: 0.5rem;
+  color: rgba(255,255,255,0.6);
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.word-display {
+  font-family: monospace;
+  font-size: 1.3rem;
+  font-weight: bold;
+  letter-spacing: 6px;
+  color: #444466;
+  margin-bottom: 4px;
+}
+
+.word-display .word-complete { color: #FFFFFF; }
+.word-display .word-muted    { color: #444466; }
+
+.word-discovery-info {
+  font-size: 0.72rem;
+  color: #7788aa;
+  margin-bottom: 8px;
+  min-height: 1.2em;
+}
+
+.elem-btn.in-deck {
+  background: color-mix(in srgb, var(--elem-color) 40%, #0d0d22);
+  border-color: var(--elem-color);
+  color: #ffffff;
+  box-shadow: 0 0 5px color-mix(in srgb, var(--elem-color) 50%, transparent);
+}
+
+.elem-btn-pos {
+  font-size: 0.6rem;
+  color: #FFCC44;
+  font-weight: bold;
+  margin-top: 1px;
+}
+
 /* ── Bonus portal ────────────────────────────────────────────── */
 .bonus-grid {
   display: flex;

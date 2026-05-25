@@ -6,6 +6,7 @@ import { RareteLettre } from "./RareteLettre";
 export class BonusManager {
   private actifs: BonusType[] = [];
   private niveaux: Map<BonusType, number> = new Map();
+  private globalMult: number = 1.0;
 
   activer(b: BonusType): boolean {
     if (this.actifs.includes(b) || this.actifs.length >= 3) return false;
@@ -21,6 +22,8 @@ export class BonusManager {
     this.niveaux.set(b, n);
   }
 
+  setGlobalMult(m: number): void { this.globalMult = m; }
+
   getActifs(): BonusType[] { return [...this.actifs]; }
 
   getMultiplicateur(tour: LettreTour, stat: string): number {
@@ -32,7 +35,7 @@ export class BonusManager {
       // +10% of base buff per level above 1
       const effectiveMult = 1 + (def.mult - 1) * (1 + (niveau - 1) * 0.1);
       return acc * effectiveMult;
-    }, 1.0);
+    }, 1.0) * this.globalMult;
   }
 
   private sApplique(b: BonusType, t: LettreTour): boolean {

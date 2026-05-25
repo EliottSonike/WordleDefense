@@ -45,6 +45,7 @@ export class GameSession {
     waveTexts: string[],
     startingLetters: import("./LettreTour").LettreTour[] = [],
     activeBonuses: { type: BonusType; niveau: number }[] = [],
+    wordBonusMult: number = 1.0,
   ) {
     this.waveTexts  = waveTexts;
     this.cheminPx   = map.chemin.map(c => c.centre);
@@ -53,6 +54,7 @@ export class GameSession {
       this.bm.activer(type);
       this.bm.setNiveau(type, niveau);
     }
+    if (wordBonusMult !== 1.0) this.bm.setGlobalMult(wordBonusMult);
   }
 
   private cheminPx: Point2D[];

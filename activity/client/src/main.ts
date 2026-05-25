@@ -33,13 +33,14 @@ async function initDiscord(): Promise<void> {
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 
-const TICKETS_KEY     = "wd_tickets";
-const COLLECTION_KEY  = "wd_collection";
-const BONUSES_KEY     = "wd_bonuses";
-const ACTIVE_BNS_KEY  = "wd_active_bonuses";
-const DECKS_KEY       = "wd_decks";
-const ACTIVE_DECK_KEY = "wd_active_deck";
-const STARTING_TICKETS = 30;
+const TICKETS_KEY       = "wd_tickets";
+const COLLECTION_KEY    = "wd_collection";
+const BONUSES_KEY       = "wd_bonuses";
+const ACTIVE_BNS_KEY    = "wd_active_bonuses";
+const DECKS_KEY         = "wd_decks";
+const ACTIVE_DECK_KEY   = "wd_active_deck";
+const WORD_DISC_KEY     = "wd_word_discovery";
+const STARTING_TICKETS  = 30;
 
 const ALL_LETTERS  = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 const ALL_ELEMENTS = ["FEU", "EAU", "TERRE", "VENT"];
@@ -48,7 +49,22 @@ const ALL_ELEMENTS = ["FEU", "EAU", "TERRE", "VENT"];
 
 interface CollectionEntry { lettre: string; element: string; rarete: string; niveau: number }
 interface BonusEntry      { type: string; niveau: number }
-interface DeckSlot        { name: string; selections: Record<string, string> }
+interface DeckLetter      { lettre: string; element: string }
+interface DeckSlot        { name: string; letters: DeckLetter[] }
+interface WordDiscovery   { words: string[]; totalPoints: number }
+
+// ── Scrabble scoring ──────────────────────────────────────────────────────────
+
+const SCRABBLE: Record<string, number> = {
+  A:1,E:1,I:1,O:1,U:1,L:1,N:1,S:1,T:1,R:1,
+  D:2,G:2,B:3,C:3,M:3,P:3,F:4,H:4,V:4,W:4,Y:4,
+  K:5,J:8,X:8,Q:10,Z:10,
+};
+function scrabbleScore(word: string): number {
+  return [...word.toUpperCase()].reduce((s, c) => s + (SCRABBLE[c] ?? 0), 0);
+}
+function wordPoints(score: number): number { return Math.ceil(score / 5); }
+function wordBonusMult(totalPoints: number): number { return 1 + totalPoints * 0.01; }
 
 // ── Bonus display info ────────────────────────────────────────────────────────
 
@@ -62,7 +78,6 @@ const BONUS_INFO: Record<string, { label: string; icon: string; desc: string; co
   BOOST_RARES:      { label: "Rares ★",    icon: "★",  desc: "Toutes stats ×1.3 (lettres rares)", color: "#cc9900", rarete: "RARE"   },
   BOOST_ATK_GLOBAL: { label: "Attaque+",   icon: "⚔",  desc: "ATK ×1.2 pour toutes les tours",   color: "#aaaaff", rarete: "COMMUN" },
 };
-
 const BONUS_POOL = [...ALL_BONUS_TYPES];
 
 // ── Tickets ───────────────────────────────────────────────────────────────────
@@ -119,20 +134,31 @@ function saveActiveBonuses(active: string[]): void {
   localStorage.setItem(ACTIVE_BNS_KEY, JSON.stringify(active));
 }
 
-// ── Deck slots ────────────────────────────────────────────────────────────────
+// ── Deck slots (ordered, 5 letters max) ──────────────────────────────────────
 
-const DEFAULT_DECKS: DeckSlot[] = [
-  { name: "Deck 1", selections: {} },
-  { name: "Deck 2", selections: {} },
-  { name: "Deck 3", selections: {} },
-];
+function makeDefaultDecks(): DeckSlot[] {
+  return [
+    { name: "Deck 1", letters: [] },
+    { name: "Deck 2", letters: [] },
+    { name: "Deck 3", letters: [] },
+  ];
+}
 
 function getDeckSlots(): DeckSlot[] {
   try {
     const raw = localStorage.getItem(DECKS_KEY);
-    if (!raw) return DEFAULT_DECKS.map(d => ({ ...d, selections: {} }));
-    return JSON.parse(raw) as DeckSlot[];
-  } catch { return DEFAULT_DECKS.map(d => ({ ...d, selections: {} })); }
+    if (!raw) return makeDefaultDecks();
+    const parsed = JSON.parse(raw) as Array<{
+      name: string;
+      selections?: Record<string, string>;
+      letters?: DeckLetter[];
+    }>;
+    return parsed.map(d => ({
+      name: d.name,
+      // Migrate old Record<string,string> format to ordered array
+      letters: d.letters ?? Object.entries(d.selections ?? {}).slice(0, 5).map(([lettre, element]) => ({ lettre, element })),
+    }));
+  } catch { return makeDefaultDecks(); }
 }
 function saveDeckSlots(decks: DeckSlot[]): void {
   localStorage.setItem(DECKS_KEY, JSON.stringify(decks));
@@ -142,6 +168,17 @@ function getActiveDeckIdx(): number {
 }
 function saveActiveDeckIdx(idx: number): void {
   localStorage.setItem(ACTIVE_DECK_KEY, String(idx));
+}
+
+// ── Word discovery ────────────────────────────────────────────────────────────
+
+function getWordDiscovery(): WordDiscovery {
+  try {
+    return JSON.parse(localStorage.getItem(WORD_DISC_KEY) ?? '{"words":[],"totalPoints":0}') as WordDiscovery;
+  } catch { return { words: [], totalPoints: 0 }; }
+}
+function saveWordDiscovery(d: WordDiscovery): void {
+  localStorage.setItem(WORD_DISC_KEY, JSON.stringify(d));
 }
 
 // ── Screen helpers ────────────────────────────────────────────────────────────
@@ -270,17 +307,17 @@ function doPullBonus(count: number): void {
   showPullResults("bonus-pull-results", items);
 }
 
-// ── Bonus portal ──────────────────────────────────────────────────────────────
+// ── Bonus portal (in letterbox) ───────────────────────────────────────────────
 
 function renderBonusPortal(): void {
   const col    = getBonusCollection();
   const active = getActiveBonuses();
   const list   = document.getElementById("bonus-collection")!;
   const count  = document.getElementById("bonus-active-count")!;
+  const emptyEl = document.getElementById("bonus-empty")!;
   count.textContent = `(${active.length}/3)`;
   list.innerHTML = "";
-
-  document.getElementById("bonus-empty")!.classList.toggle("hidden", col.length > 0);
+  emptyEl.classList.toggle("hidden", col.length > 0);
   if (col.length === 0) return;
 
   for (const entry of col) {
@@ -313,17 +350,21 @@ function renderBonusPortal(): void {
   }
 }
 
-// ── Letterbox with deck tabs ──────────────────────────────────────────────────
+// ── Letterbox with ordered deck + word display ────────────────────────────────
 
 function renderLetterbox(): void {
-  const col       = getCollection();
-  const decks     = getDeckSlots();
-  const activeIdx = getActiveDeckIdx();
-  const deck      = decks[activeIdx]?.selections ?? {};
-  const tabBar    = document.getElementById("deck-tab-bar")!;
-  const list      = document.getElementById("letterbox-list")!;
-  const empty     = document.getElementById("letterbox-empty")!;
+  const col        = getCollection();
+  const decks      = getDeckSlots();
+  const activeIdx  = getActiveDeckIdx();
+  const deckLetters = decks[activeIdx]?.letters ?? [];
+  const tabBar     = document.getElementById("deck-tab-bar")!;
+  const slotsEl    = document.getElementById("word-slots-container")!;
+  const wordEl     = document.getElementById("word-display")!;
+  const discEl     = document.getElementById("word-discovery-info")!;
+  const list       = document.getElementById("letterbox-list")!;
+  const empty      = document.getElementById("letterbox-empty")!;
 
+  // Tabs
   tabBar.innerHTML = "";
   decks.forEach((d, i) => {
     const btn = document.createElement("button");
@@ -333,9 +374,48 @@ function renderLetterbox(): void {
     tabBar.appendChild(btn);
   });
 
+  // Word slots (5 ordered positions)
+  slotsEl.innerHTML = "";
+  for (let i = 0; i < 5; i++) {
+    const entry = deckLetters[i];
+    const slot = document.createElement("div");
+    if (entry) {
+      slot.className = "word-slot filled";
+      slot.style.setProperty("--slot-color", getCouleur(entry.element as Element));
+      slot.title = "Cliquer pour retirer";
+      slot.innerHTML = `<span class="slot-letter">${entry.lettre}</span><span class="slot-elem">${entry.element.slice(0,3)}</span>`;
+      slot.addEventListener("click", () => {
+        const ds = getDeckSlots();
+        ds[getActiveDeckIdx()].letters.splice(i, 1);
+        saveDeckSlots(ds);
+        renderLetterbox();
+      });
+    } else {
+      slot.className = "word-slot empty";
+      slot.textContent = "_";
+    }
+    slotsEl.appendChild(slot);
+  }
+
+  // Word display
+  const word = deckLetters.map(l => l.lettre).join("");
+  const isComplete = deckLetters.length === 5;
+  wordEl.innerHTML = isComplete
+    ? `<span class="word-complete">${word}</span>`
+    : `<span class="word-muted">${word}${"_".repeat(5 - deckLetters.length)}</span>`;
+
+  // Word discovery info
+  const disc = getWordDiscovery();
+  if (disc.words.length > 0) {
+    const mult = wordBonusMult(disc.totalPoints);
+    discEl.textContent = `Maîtrise : ×${mult.toFixed(2)} ATK global — ${disc.words.length} mot${disc.words.length > 1 ? "s" : ""} découvert${disc.words.length > 1 ? "s" : ""}`;
+  } else {
+    discEl.textContent = "Formez un mot valide avec 5 lettres pour un bonus permanent.";
+  }
+
+  // Letter rows
   list.innerHTML = "";
   empty.classList.toggle("hidden", col.length > 0);
-
 
   for (const letter of ALL_LETTERS) {
     const owned = col.filter(e => e.lettre === letter);
@@ -349,24 +429,42 @@ function renderLetterbox(): void {
     row.appendChild(lbl);
 
     for (const elem of ALL_ELEMENTS) {
-      const entry   = owned.find(e => e.element === elem);
-      const btn     = document.createElement("button");
-      const selected = deck[letter] === elem;
+      const entry    = owned.find(e => e.element === elem);
+      const btn      = document.createElement("button");
+      const deckIdx  = deckLetters.findIndex(l => l.lettre === letter && l.element === elem);
+      const inDeck   = deckIdx >= 0;
 
       if (entry) {
-        btn.className = "elem-btn owned" + (selected ? " selected" : "");
-        btn.style.setProperty("--elem-color", getCouleur(entry.element as Element));
-        btn.innerHTML = `<span class="elem-btn-name">${elem.slice(0,3)}</span><span class="elem-btn-lv">Nv.${entry.niveau}</span>`;
-        if (entry.rarete === RareteLettre.RARE) btn.classList.add("elem-rare");
-        btn.addEventListener("click", () => {
-          const ds  = getDeckSlots();
-          const ai  = getActiveDeckIdx();
-          const sel = ds[ai].selections;
-          if (sel[letter] === elem) delete sel[letter];
-          else sel[letter] = elem;
-          saveDeckSlots(ds);
-          renderLetterbox();
-        });
+        if (inDeck) {
+          btn.className = "elem-btn owned in-deck";
+          btn.style.setProperty("--elem-color", getCouleur(entry.element as Element));
+          btn.innerHTML = `<span class="elem-btn-name">${elem.slice(0,3)}</span><span class="elem-btn-pos">#${deckIdx + 1}</span>`;
+          if (entry.rarete === RareteLettre.RARE) btn.classList.add("elem-rare");
+          btn.addEventListener("click", () => {
+            const ds = getDeckSlots();
+            const ai = getActiveDeckIdx();
+            const idx = ds[ai].letters.findIndex(l => l.lettre === letter && l.element === elem);
+            if (idx >= 0) { ds[ai].letters.splice(idx, 1); saveDeckSlots(ds); renderLetterbox(); }
+          });
+        } else {
+          const canAdd = deckLetters.length < 5;
+          btn.className = "elem-btn owned";
+          btn.style.setProperty("--elem-color", getCouleur(entry.element as Element));
+          btn.innerHTML = `<span class="elem-btn-name">${elem.slice(0,3)}</span><span class="elem-btn-lv">Nv.${entry.niveau}</span>`;
+          if (entry.rarete === RareteLettre.RARE) btn.classList.add("elem-rare");
+          btn.disabled = !canAdd;
+          if (canAdd) {
+            btn.addEventListener("click", () => {
+              const ds = getDeckSlots();
+              const ai = getActiveDeckIdx();
+              if (ds[ai].letters.length < 5) {
+                ds[ai].letters.push({ lettre: letter, element: elem });
+                saveDeckSlots(ds);
+                renderLetterbox();
+              }
+            });
+          }
+        }
       } else {
         btn.className = "elem-btn locked";
         btn.disabled  = true;
@@ -376,6 +474,8 @@ function renderLetterbox(): void {
     }
     list.appendChild(row);
   }
+
+  renderBonusPortal();
 }
 
 // ── In-game state ─────────────────────────────────────────────────────────────
@@ -483,14 +583,14 @@ function loop(ts: number): void {
   requestAnimationFrame(loop);
 }
 
-function startGame(): void {
+async function startGame(): Promise<void> {
   const col       = getCollection();
   const decks     = getDeckSlots();
   const activeIdx = getActiveDeckIdx();
-  const deck      = decks[activeIdx]?.selections ?? {};
+  const deckLetters = decks[activeIdx]?.letters ?? [];
 
-  const deckEntries = Object.entries(deck)
-    .map(([lettre, element]) => col.find(e => e.lettre === lettre && e.element === element))
+  const deckEntries = deckLetters
+    .map(l => col.find(e => e.lettre === l.lettre && e.element === l.element))
     .filter((e): e is CollectionEntry => e !== undefined);
   const startingLetters = (deckEntries.length > 0 ? deckEntries : col).map(entryToLettreTour);
 
@@ -501,7 +601,30 @@ function startGame(): void {
     .filter((b): b is BonusEntry => b !== undefined)
     .map(b => ({ type: b.type as BonusType, niveau: b.niveau }));
 
-  session = new GameSession(mapData, waveTexts, startingLetters, activeBonuses);
+  // Word bonus check
+  let wbMult = wordBonusMult(getWordDiscovery().totalPoints);
+  if (deckLetters.length === 5) {
+    const word = deckLetters.map(l => l.lettre).join("");
+    try {
+      const r = await fetch(`/api/check-word/${word}`);
+      const data = await r.json() as { valid: boolean; score: number };
+      if (data.valid) {
+        const disc = getWordDiscovery();
+        const isNew = !disc.words.includes(word);
+        const pts = wordPoints(data.score);
+        if (isNew) {
+          disc.words.push(word);
+          disc.totalPoints += pts;
+          saveWordDiscovery(disc);
+          log(`✦ Nouveau mot : ${word} (score ${data.score}, +${pts} pts de maîtrise)`);
+        }
+        wbMult = wordBonusMult(getWordDiscovery().totalPoints);
+        log(`Maîtrise des mots : ×${wbMult.toFixed(2)} ATK global`);
+      }
+    } catch { /* silently skip if server unreachable */ }
+  }
+
+  session = new GameSession(mapData, waveTexts, startingLetters, activeBonuses, wbMult);
 
   const panelW = 220;
   const availW = Math.max(400, window.innerWidth - panelW - 2);
@@ -525,7 +648,7 @@ async function main(): Promise<void> {
   });
   document.getElementById("btn-cancel-place")!.addEventListener("click", cancelPlacing);
 
-  document.getElementById("btn-solo")!.addEventListener("click", startGame);
+  document.getElementById("btn-solo")!.addEventListener("click", () => startGame().catch(console.error));
 
   // Reset — double-clic (confirm() bloqué dans les iframes Discord)
   let resetClicks = 0;
@@ -538,13 +661,13 @@ async function main(): Promise<void> {
       return;
     }
     resetClicks = 0;
-    ["wd_deck", TICKETS_KEY, COLLECTION_KEY, BONUSES_KEY, ACTIVE_BNS_KEY, DECKS_KEY, ACTIVE_DECK_KEY]
+    ["wd_deck", TICKETS_KEY, COLLECTION_KEY, BONUSES_KEY, ACTIVE_BNS_KEY, DECKS_KEY, ACTIVE_DECK_KEY, WORD_DISC_KEY]
       .forEach(k => localStorage.removeItem(k));
     btnReset.textContent = "Réinitialiser la progression";
     updateTicketDisplays();
   });
 
-  // Invocation (lettres + bonus)
+  // Invocation
   document.getElementById("btn-go-invocation")!.addEventListener("click", () => {
     updateTicketDisplays();
     showScreen("invocation");
@@ -558,7 +681,7 @@ async function main(): Promise<void> {
   document.getElementById("btn-pull-bonus-1")!.addEventListener("click",  () => doPullBonus(1));
   document.getElementById("btn-pull-bonus-10")!.addEventListener("click", () => doPullBonus(10));
 
-  // Tab switching dans l'écran invocation
+  // Invocation tab switching
   document.getElementById("inv-tab-letters")!.addEventListener("click", () => {
     document.getElementById("inv-section-letters")!.classList.remove("hidden");
     document.getElementById("inv-section-bonus")!.classList.add("hidden");
@@ -572,10 +695,9 @@ async function main(): Promise<void> {
     document.getElementById("inv-tab-letters")!.classList.remove("active");
   });
 
-  // Letterbox (lettres + bonus actifs)
+  // Letterbox (deck + bonus actifs)
   document.getElementById("btn-go-letterbox")!.addEventListener("click", () => {
     renderLetterbox();
-    renderBonusPortal();
     showScreen("letterbox");
   });
   document.getElementById("btn-back-letterbox")!.addEventListener("click", () => showScreen("menu"));
