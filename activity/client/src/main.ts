@@ -21,10 +21,13 @@ gameAudio.loop   = true;
 gameAudio.volume = 0;
 
 let audioUnlocked = false;
+// Default music to play on first user interaction; button handlers can override it
+// before the document listener fires (event bubbling order: target → document).
+let _pendingMusic: (() => void) | null = () => playMenuMusic();
 
 function fadeTo(audio: HTMLAudioElement, target: number, ms = 800): void {
-  const start    = audio.volume;
-  const t0       = Date.now();
+  const start = audio.volume;
+  const t0    = Date.now();
   if (target > 0 && audio.paused) audio.play().catch(() => {});
   function tick() {
     const p = Math.min(1, (Date.now() - t0) / ms);
@@ -42,7 +45,9 @@ function stopAllMusic():   void { fadeTo(menuAudio, 0); fadeTo(gameAudio, 0); }
 function unlockAudio(): void {
   if (audioUnlocked) return;
   audioUnlocked = true;
-  playMenuMusic();
+  const fn = _pendingMusic;
+  _pendingMusic = null;
+  fn?.();
 }
 
 // ── Button ding (Web Audio API) ───────────────────────────────────────────────
@@ -67,12 +72,8 @@ function playDing(): void {
 }
 
 document.addEventListener("click", (e) => {
-  if ((e.target as HTMLElement).closest("button")) {
-    unlockAudio();
-    playDing();
-  } else {
-    unlockAudio();
-  }
+  unlockAudio();
+  if ((e.target as HTMLElement).closest("button")) playDing();
 });
 
 // ── Discord SDK ───────────────────────────────────────────────────────────────
@@ -924,6 +925,7 @@ async function main(): Promise<void> {
     campaignLevelIdx = 0;
     campaignStats    = { totalTickets: 0, totalKills: 0, levelsCleared: 0 };
     transitionShown  = false;
+    _pendingMusic    = null; // empêche unlockAudio (document handler) de lancer la musique menu
     playGameMusic();
     startGame(0).catch(console.error);
   });
