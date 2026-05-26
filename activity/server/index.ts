@@ -25,6 +25,7 @@ const ROOT = path.resolve(__dirname, "..", "..");
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "dist")));
+app.use(express.static(path.join(__dirname, "..", "client", "public")));
 
 // ── Ticket storage (JSON par Discord user ID) ─────────────────────────────────
 
