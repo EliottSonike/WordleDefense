@@ -22,8 +22,9 @@ const WALK_COORDS: [number, number, number, number][] = [
 
 let zombieFrames: HTMLCanvasElement[] = [];
 
-// Tracks last x position per monster to determine facing direction
-const monsterPrevX = new WeakMap<object, number>();
+// Tracks facing direction per monster (true = right); updated only on significant horizontal movement
+const monsterPrevX   = new WeakMap<object, number>();
+const monsterFacingR = new WeakMap<object, boolean>();
 
 function loadZombieSprite(): void {
   const img = new Image();
@@ -336,14 +337,19 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.fillStyle = "#FFFFFF";
       ctx.fillText("🛡", cx, cy);
     } else if (zombieFrames.length === 6) {
-      const frame     = zombieFrames[Math.floor(Date.now() / 120) % 6];
-      const sh        = mr * 2.8;
-      const sw        = sh * (frame.width / frame.height);
-      const dx        = cx - sw / 2;
-      const dy        = cy - sh * 0.82;
-      const prevX     = monsterPrevX.get(m) ?? m.position.x;
+      const frame = zombieFrames[Math.floor(Date.now() / 120) % 6];
+      const sh    = mr * 1.9;
+      const sw    = sh * (frame.width / frame.height);
+      const dx    = cx - sw / 2;
+      const dy    = cy - sh * 0.80;
+
+      // Update facing only when horizontal movement is significant (avoids flicker on vertical segments)
+      const prevX = monsterPrevX.get(m);
       monsterPrevX.set(m, m.position.x);
-      const facingRight = m.position.x >= prevX;
+      if (prevX !== undefined && Math.abs(m.position.x - prevX) > 0.4) {
+        monsterFacingR.set(m, m.position.x > prevX);
+      }
+      const facingRight = monsterFacingR.get(m) ?? true;
       ctx.restore();
       ctx.save();
       if (m.isRegen) { ctx.shadowColor = "#88FFCC"; ctx.shadowBlur = 8; }
@@ -356,7 +362,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
         ctx.globalAlpha = 0.22;
         ctx.fillStyle   = "#88FFCC";
         ctx.beginPath();
-        ctx.arc(facingRight ? cx : 2 * cx - cx, cy, mr, 0, Math.PI * 2);
+        ctx.arc(cx, cy, mr, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
       }
