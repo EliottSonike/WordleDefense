@@ -10,6 +10,44 @@ import { parseMap } from "./game/MapParser";
 import { BonusType, ALL_BONUS_TYPES } from "./game/BonusType";
 import { BonusManager } from "./game/BonusManager";
 
+// ── Audio ─────────────────────────────────────────────────────────────────────
+
+const menuAudio = new Audio("/music/menu.mp3");
+menuAudio.loop   = true;
+menuAudio.volume = 0;
+
+const gameAudio = new Audio("/music/game.mp3");
+gameAudio.loop   = true;
+gameAudio.volume = 0;
+
+let audioUnlocked = false;
+
+function fadeTo(audio: HTMLAudioElement, target: number, ms = 800): void {
+  const start    = audio.volume;
+  const t0       = Date.now();
+  if (target > 0 && audio.paused) audio.play().catch(() => {});
+  function tick() {
+    const p = Math.min(1, (Date.now() - t0) / ms);
+    audio.volume = start + (target - start) * p;
+    if (p < 1) requestAnimationFrame(tick);
+    else if (target === 0) audio.pause();
+  }
+  requestAnimationFrame(tick);
+}
+
+function playMenuMusic(): void { fadeTo(gameAudio, 0); fadeTo(menuAudio, 0.35); }
+function playGameMusic():  void { fadeTo(menuAudio, 0); fadeTo(gameAudio, 0.45); }
+function stopAllMusic():   void { fadeTo(menuAudio, 0); fadeTo(gameAudio, 0); }
+
+function unlockAudio(): void {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  // Start menu music on first user interaction
+  menuAudio.play().then(() => { menuAudio.pause(); menuAudio.volume = 0; playMenuMusic(); }).catch(() => {});
+}
+
+document.addEventListener("click", unlockAudio, { once: true });
+
 // ── Discord SDK ───────────────────────────────────────────────────────────────
 
 const sdk = new DiscordSDK(import.meta.env.VITE_DISCORD_CLIENT_ID ?? "");
@@ -859,6 +897,7 @@ async function main(): Promise<void> {
     campaignLevelIdx = 0;
     campaignStats    = { totalTickets: 0, totalKills: 0, levelsCleared: 0 };
     transitionShown  = false;
+    playGameMusic();
     startGame(0).catch(console.error);
   });
 
@@ -871,6 +910,7 @@ async function main(): Promise<void> {
     document.getElementById("game-over")!.classList.add("hidden");
     document.getElementById("screen-transition")!.classList.add("hidden");
     updateTicketDisplays();
+    playMenuMusic();
     showScreen("menu");
   });
 
@@ -955,6 +995,7 @@ async function main(): Promise<void> {
   }
 
   updateTicketDisplays();
+  playMenuMusic();
   showScreen("menu");
 }
 
