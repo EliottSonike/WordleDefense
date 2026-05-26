@@ -42,11 +42,38 @@ function stopAllMusic():   void { fadeTo(menuAudio, 0); fadeTo(gameAudio, 0); }
 function unlockAudio(): void {
   if (audioUnlocked) return;
   audioUnlocked = true;
-  // Start menu music on first user interaction
-  menuAudio.play().then(() => { menuAudio.pause(); menuAudio.volume = 0; playMenuMusic(); }).catch(() => {});
+  playMenuMusic();
 }
 
-document.addEventListener("click", unlockAudio, { once: true });
+// ── Button ding (Web Audio API) ───────────────────────────────────────────────
+
+let _dingCtx: AudioContext | null = null;
+
+function playDing(): void {
+  try {
+    if (!_dingCtx) _dingCtx = new AudioContext();
+    if (_dingCtx.state === "suspended") _dingCtx.resume().catch(() => {});
+    const osc  = _dingCtx.createOscillator();
+    const gain = _dingCtx.createGain();
+    osc.connect(gain);
+    gain.connect(_dingCtx.destination);
+    osc.frequency.value = 880;
+    osc.type = "sine";
+    gain.gain.setValueAtTime(0.22, _dingCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, _dingCtx.currentTime + 0.12);
+    osc.start();
+    osc.stop(_dingCtx.currentTime + 0.12);
+  } catch { /* silently ignore */ }
+}
+
+document.addEventListener("click", (e) => {
+  if ((e.target as HTMLElement).closest("button")) {
+    unlockAudio();
+    playDing();
+  } else {
+    unlockAudio();
+  }
+});
 
 // ── Discord SDK ───────────────────────────────────────────────────────────────
 

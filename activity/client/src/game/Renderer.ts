@@ -353,7 +353,7 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.restore();
       ctx.save();
       if (m.isRegen) { ctx.shadowColor = "#88FFCC"; ctx.shadowBlur = 8; }
-      if (!facingRight) {
+      if (facingRight) {
         ctx.translate(2 * cx, 0);
         ctx.scale(-1, 1);
       }
