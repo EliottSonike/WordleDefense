@@ -9,17 +9,21 @@ const CANVAS_W = 700;
 const CANVAS_H = CANVAS_W + HUD_H;
 
 // ── Zombie sprite ─────────────────────────────────────────────────────────────
-// 6 WALK frames from the sprite sheet (sx, sy, sw, sh)
+// Image: 1000×558 — 3 rows of ~186px each (IDLE / WALKING / FALLING)
+// WALKING row starts at y≈186. 6 frames across ~950px = ~158px each.
 const WALK_COORDS: [number, number, number, number][] = [
-  [52,  265, 155, 220],
-  [210, 265, 155, 220],
-  [368, 265, 155, 220],
-  [526, 265, 155, 220],
-  [684, 265, 155, 220],
-  [842, 265, 155, 220],
+  [36,  190, 153, 148],
+  [193, 190, 153, 148],
+  [350, 190, 153, 148],
+  [507, 190, 153, 148],
+  [664, 190, 153, 148],
+  [820, 190, 153, 148],
 ];
 
 let zombieFrames: HTMLCanvasElement[] = [];
+
+// Tracks last x position per monster to determine facing direction
+const monsterPrevX = new WeakMap<object, number>();
 
 function loadZombieSprite(): void {
   const img = new Image();
@@ -332,24 +336,27 @@ export function render(ctx: CanvasRenderingContext2D, state: GameState): void {
       ctx.fillStyle = "#FFFFFF";
       ctx.fillText("🛡", cx, cy);
     } else if (zombieFrames.length === 6) {
-      const frame = zombieFrames[Math.floor(Date.now() / 120) % 6];
-      const sh    = mr * 2.6;
-      const sw    = sh * (frame.width / frame.height);
-      const dx    = cx - sw / 2;
-      const dy    = cy - sh * 0.65;
+      const frame     = zombieFrames[Math.floor(Date.now() / 120) % 6];
+      const sh        = mr * 2.8;
+      const sw        = sh * (frame.width / frame.height);
+      const dx        = cx - sw / 2;
+      const dy        = cy - sh * 0.82;
+      const prevX     = monsterPrevX.get(m) ?? m.position.x;
+      monsterPrevX.set(m, m.position.x);
+      const facingRight = m.position.x >= prevX;
       ctx.restore();
       ctx.save();
-      if (m.isRegen) {
-        ctx.shadowColor = "#88FFCC";
-        ctx.shadowBlur  = 8;
+      if (m.isRegen) { ctx.shadowColor = "#88FFCC"; ctx.shadowBlur = 8; }
+      if (!facingRight) {
+        ctx.translate(2 * cx, 0);
+        ctx.scale(-1, 1);
       }
-      // Tint with element color using a subtle overlay
       ctx.drawImage(frame, dx, dy, sw, sh);
       if (m.isRegen) {
-        ctx.globalAlpha = 0.25;
+        ctx.globalAlpha = 0.22;
         ctx.fillStyle   = "#88FFCC";
         ctx.beginPath();
-        ctx.arc(cx, cy, mr, 0, Math.PI * 2);
+        ctx.arc(facingRight ? cx : 2 * cx - cx, cy, mr, 0, Math.PI * 2);
         ctx.fill();
         ctx.globalAlpha = 1;
       }
